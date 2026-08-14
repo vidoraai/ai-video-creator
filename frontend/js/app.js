@@ -13,7 +13,7 @@ return;
 status.textContent = "Sending your video request...";
 
 try {
-const response = await fetch("http://localhost:5000/api/videos/generate", {
+const response = await fetch("https://vidora-ai-99yg.onrender.com/api/videos/generate", {
 method: "POST",
 headers: {
 "Content-Type": "application/json"
