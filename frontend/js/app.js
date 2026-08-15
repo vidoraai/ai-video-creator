@@ -22,7 +22,11 @@ body: JSON.stringify({
 prompt: videoPrompt
 })
 });
-
+const data = await response.json();
+if (!response.ok) {
+throw new Error(data.message || "Request failed");
+}
+status.textContent = "Video request received. Status: " + data.status;
 } catch (error) {
 status.textContent = "Unable to connect to Vidora AI server.";
 console.error(error);
