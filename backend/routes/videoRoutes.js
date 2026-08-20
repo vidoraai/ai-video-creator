@@ -40,5 +40,26 @@ router.post("/generate", async (req, res) => {
     });
   }
 });
+router.get("/:id", async (req, res) => {
+  try {
+    const video = await openai.videos.retrieve(req.params.id);
 
+    res.json({
+      success: true,
+      id: video.id,
+      status: video.status,
+      progress: video.progress,
+      video
+    });
+
+  } catch (error) {
+    console.error("Video status error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to check video status.",
+      error: error.message
+    });
+  }
+});
 module.exports = router;
