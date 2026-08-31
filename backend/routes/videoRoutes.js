@@ -3,7 +3,7 @@ const OpenAI = require("openai");
 
 const router = express.Router();
 
-const openai = new OpenAI({
+const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
@@ -18,7 +18,7 @@ router.post("/generate", async (req, res) => {
       });
     }
 
-    const video = await openai.videos.create({
+    const video = await client.videos.create({
       model: "sora-2",
       prompt: prompt.trim()
     });
@@ -42,7 +42,7 @@ router.post("/generate", async (req, res) => {
 });
 router.get("/:id", async (req, res) => {
   try {
-    const video = await openai.videos.retrieve(req.params.id);
+  const video = await client.videos.retrieve(req.params.id);
 
     res.json({
       success: true,
