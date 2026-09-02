@@ -59,10 +59,29 @@ button.addEventListener("click", async () => {
 
       const currentStatus = statusData.status;
 
-      if (currentStatus === "completed") {
-        finished = true;
-        status.textContent = "Video generation completed!";
-      } else if (
+     if (currentStatus === "completed") {
+  finished = true;
+
+  status.textContent = "Video generation completed!";
+
+  const videoContainer = document.getElementById("videoContainer");
+
+  if (videoContainer) {
+    videoContainer.innerHTML = `
+      <video
+        controls
+        width="100%"
+        style="max-width: 800px; border-radius: 12px;"
+      >
+        <source
+          src="https://vidora-ai-99yg.onrender.com/api/videos/${videoId}/content"
+          type="video/mp4"
+        >
+        Your browser does not support video playback.
+      </video>
+    `;
+  }
+} else if (
         currentStatus === "failed" ||
         currentStatus === "cancelled"
       ) {
