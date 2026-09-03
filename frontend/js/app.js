@@ -2,6 +2,10 @@ const button = document.getElementById("createVideo");
 const prompt = document.getElementById("prompt");
 const status = document.getElementById("status");
 
+const duration = document.getElementById("duration");
+const aspectRatio = document.getElementById("aspectRatio");
+const style = document.getElementById("style");
+
 button.addEventListener("click", async () => {
   const videoPrompt = prompt.value.trim();
 
