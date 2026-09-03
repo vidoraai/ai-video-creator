@@ -20,7 +20,34 @@
       <h2>Create Your Video</h2>
 
       <textarea id="prompt" placeholder="Describe the video you want to create..."></textarea>
+<div class="video-settings">
 
+  <h3>Video Settings</h3>
+
+  <label for="duration">Duration</label>
+  <select id="duration">
+    <option value="4">4 seconds</option>
+    <option value="8">8 seconds</option>
+    <option value="12">12 seconds</option>
+  </select>
+
+  <label for="aspectRatio">Aspect Ratio</label>
+  <select id="aspectRatio">
+    <option value="16:9">16:9 — Landscape</option>
+    <option value="9:16">9:16 — Portrait</option>
+    <option value="1:1">1:1 — Square</option>
+  </select>
+
+  <label for="style">Video Style</label>
+  <select id="style">
+    <option value="cinematic">Cinematic</option>
+    <option value="realistic">Realistic</option>
+    <option value="animation">Animation</option>
+    <option value="documentary">Documentary</option>
+    <option value="advertisement">Advertisement</option>
+  </select>
+
+</div>
       <button id="createVideo">Create Video</button>
 
       <p id="status"></p>
