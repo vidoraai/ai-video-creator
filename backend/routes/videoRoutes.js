@@ -40,6 +40,25 @@ router.post("/generate", async (req, res) => {
     });
   }
 });
+router.get("/:id/content", async (req, res) => {
+  try {
+    const response = await client.videos.downloadContent(req.params.id);
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+
+    res.set("Content-Type", "video/mp4");
+    res.send(buffer);
+
+  } catch (error) {
+    console.error("Video content error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to download video.",
+      error: error.message
+    });
+  }
+});
 router.get("/:id", async (req, res) => {
   try {
   const video = await client.videos.retrieve(req.params.id);
