@@ -25,8 +25,11 @@ button.addEventListener("click", async () => {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          prompt: videoPrompt
-        })
+  prompt: videoPrompt,
+  duration: duration.value,
+  aspectRatio: aspectRatio.value,
+  style: style.value
+})
       }
     );
 
