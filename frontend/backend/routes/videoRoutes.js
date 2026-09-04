@@ -10,7 +10,16 @@ const client = new OpenAI({
 router.post("/generate", async (req, res) => {
   try {
     const { prompt, duration, aspectRatio, style } = req.body;
+const totalDuration = Number(duration) || 30;
 
+const sceneDuration = 4;
+
+const sceneCount = Math.ceil(totalDuration / sceneDuration);
+const scenes = Array.from({ length: sceneCount }, (_, index) => ({
+  sceneNumber: index + 1,
+  duration: sceneDuration,
+  prompt: `${prompt.trim()}. Style: ${style || "cinematic"}. Scene ${index + 1} of ${sceneCount}.`
+}));
     if (!prompt || !prompt.trim()) {
       return res.status(400).json({
         success: false,
@@ -26,11 +35,15 @@ router.post("/generate", async (req, res) => {
     });
 
     res.json({
-      success: true,
-      message: "Video generation started.",
-      id: video.id,
-      status: video.status
-    });
+  success: true,
+  message: "Video generation started.",
+  id: video.id,
+  status: video.status,
+  totalDuration,
+  sceneDuration,
+  sceneCount,
+  scenes
+});
 
   } catch (error) {
     console.error("Video generation error:", error);
