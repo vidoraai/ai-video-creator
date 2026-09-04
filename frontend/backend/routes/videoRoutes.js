@@ -21,7 +21,7 @@ router.post("/generate", async (req, res) => {
     const video = await client.videos.create({
       model: "sora-2",
       prompt: `${prompt.trim()}. Style: ${style || "cinematic"}.`,
-      seconds: Number(duration) || 4,
+      seconds: 4,
       size: aspectRatio === "9:16" ? "720x1280" : "1280x720"
     });
 
