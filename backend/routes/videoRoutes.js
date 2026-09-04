@@ -9,7 +9,12 @@ const client = new OpenAI({
 
 router.post("/generate", async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const {
+      prompt,
+      duration,
+      aspectRatio,
+      style
+    } = req.body;
 
     if (!prompt || !prompt.trim()) {
       return res.status(400).json({
@@ -18,16 +23,41 @@ router.post("/generate", async (req, res) => {
       });
     }
 
+    const totalDuration = Number(duration) || 30;
+    const sceneDuration = 4;
+    const sceneCount = Math.ceil(totalDuration / sceneDuration);
+
+    const scenes = Array.from(
+      { length: sceneCount },
+      (_, index) => ({
+        sceneNumber: index + 1,
+        duration: sceneDuration,
+        prompt:
+          `${prompt.trim()}. ` +
+          `Style: ${style || "cinematic"}. ` +
+          `Scene ${index + 1} of ${sceneCount}.`
+      })
+    );
+
     const video = await client.videos.create({
       model: "sora-2",
-      prompt: prompt.trim()
+      prompt: scenes[0].prompt,
+      seconds: 4,
+      size:
+        aspectRatio === "9:16"
+          ? "720x1280"
+          : "1280x720"
     });
 
     res.json({
       success: true,
       message: "Video generation started.",
       id: video.id,
-      status: video.status
+      status: video.status,
+      totalDuration,
+      sceneDuration,
+      sceneCount,
+      scenes
     });
 
   } catch (error) {
@@ -40,11 +70,14 @@ router.post("/generate", async (req, res) => {
     });
   }
 });
+
 router.get("/:id/content", async (req, res) => {
   try {
-    const response = await client.videos.downloadContent(req.params.id);
+    const response =
+      await client.videos.downloadContent(req.params.id);
 
-    const buffer = Buffer.from(await response.arrayBuffer());
+    const buffer =
+      Buffer.from(await response.arrayBuffer());
 
     res.set("Content-Type", "video/mp4");
     res.send(buffer);
@@ -59,9 +92,11 @@ router.get("/:id/content", async (req, res) => {
     });
   }
 });
+
 router.get("/:id", async (req, res) => {
   try {
-  const video = await client.videos.retrieve(req.params.id);
+    const video =
+      await client.videos.retrieve(req.params.id);
 
     res.json({
       success: true,
@@ -81,4 +116,5 @@ router.get("/:id", async (req, res) => {
     });
   }
 });
+
 module.exports = router;
