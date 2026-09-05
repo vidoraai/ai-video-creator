@@ -14,7 +14,8 @@ button.addEventListener("click", async () => {
     return;
   }
 
-  status.textContent = "Starting video generation...";
+  status.textContent = "Creating your video job...";
+  button.disabled = true;
 
   try {
     const response = await fetch(
@@ -25,11 +26,11 @@ button.addEventListener("click", async () => {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-  prompt: videoPrompt,
-  duration: duration.value,
-  aspectRatio: aspectRatio.value,
-  style: style.value
-})
+          prompt: videoPrompt,
+          duration: duration.value,
+          aspectRatio: aspectRatio.value,
+          style: style.value
+        })
       }
     );
 
@@ -39,70 +40,62 @@ button.addEventListener("click", async () => {
       throw new Error(data.message || "Request failed");
     }
 
-    const videoId = data.id;
+    const jobId = data.jobId;
 
-    if (!videoId) {
-      throw new Error("No video ID was returned.");
+    if (!jobId) {
+      throw new Error("No job ID was returned.");
     }
 
-    status.textContent = "Video generation started. Please wait...";
+    status.textContent =
+      "Video job created successfully. Preparing your video...";
 
     let finished = false;
 
     while (!finished) {
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      await new Promise((resolve) => setTimeout(resolve, 3000));
 
-      const statusResponse = await fetch(
-        `https://vidora-ai-99yg.onrender.com/api/videos/${videoId}`
+      const jobResponse = await fetch(
+        `https://vidora-ai-99yg.onrender.com/api/videos/job/${jobId}`
       );
 
-      const statusData = await statusResponse.json();
+      const jobData = await jobResponse.json();
 
-      if (!statusResponse.ok) {
+      if (!jobResponse.ok) {
         throw new Error(
-          statusData.message || "Unable to check video status."
+          jobData.message || "Unable to check video job."
         );
       }
 
-      const currentStatus = statusData.status;
+      const job = jobData.job;
 
-     if (currentStatus === "completed") {
-  finished = true;
+      status.textContent =
+        "Video status: " + job.status;
 
-  status.textContent = "Video generation completed!";
+      if (job.status === "completed") {
+        finished = true;
 
-  const videoContainer = document.getElementById("videoContainer");
+        status.textContent =
+          "Video generation completed!";
+      }
 
-  if (videoContainer) {
-    videoContainer.innerHTML = `
-      <video
-        controls
-        width="100%"
-        style="max-width: 800px; border-radius: 12px;"
-      >
-        <source
-          src="https://vidora-ai-99yg.onrender.com/api/videos/${videoId}/content"
-          type="video/mp4"
-        >
-        Your browser does not support video playback.
-      </video>
-    `;
-  }
-} else if (
-        currentStatus === "failed" ||
-        currentStatus === "cancelled"
+      if (
+        job.status === "failed" ||
+        job.status === "cancelled"
       ) {
         finished = true;
+
         status.textContent =
-          "Video generation failed: " + currentStatus;
-      } else {
-        status.textContent =
-          "Generating video... Status: " + currentStatus;
+          "Video generation failed: " + job.status;
       }
     }
+
   } catch (error) {
     console.error(error);
+
     status.textContent =
-      "Unable to generate the video: " + error.message;
+      "Unable to create video: " + error.message;
+
+  } finally {
+    button.disabled = false;
   }
 });
