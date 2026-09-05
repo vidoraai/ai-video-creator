@@ -12,6 +12,7 @@ function createJob(data) {
     sceneCount: data.sceneCount,
     scenes: data.scenes || [],
     completedScenes: 0,
+    sceneVideos: [],
     createdAt: new Date().toISOString()
   };
 
