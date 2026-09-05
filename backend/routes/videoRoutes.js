@@ -1,6 +1,10 @@
 const express = require("express");
 const OpenAI = require("openai");
-
+const {
+  createJob,
+  getJob,
+  updateJob
+} = require("../services/videoJobService");
 const router = express.Router();
 
 const client = new OpenAI({
