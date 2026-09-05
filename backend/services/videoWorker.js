@@ -40,7 +40,7 @@ async function waitForVideo(videoId) {
 
 async function processVideoJob(jobId) {
   const job = getJob(jobId);
-
+const sceneVideos = [];
   if (!job) {
     console.error("Job not found:", jobId);
     return;
@@ -84,14 +84,14 @@ async function processVideoJob(jobId) {
       updateJob(jobId, {
   completedScenes: i + 1,
   lastVideoId: completedVideo.id,
-  sceneVideos: [
-    ...job.sceneVideos,
-    {
-      sceneNumber: scene.sceneNumber,
-      videoId: completedVideo.id,
-      status: "completed"
-    }
-  ]
+ sceneVideos: [
+  ...sceneVideos,
+  {
+    sceneNumber: scene.sceneNumber,
+    videoId: completedVideo.id,
+    status: "completed"
+  }
+]
 });
 
       console.log(
