@@ -6,7 +6,7 @@ const {
   getJob,
   updateJob
 } = require("../services/videoJobService");
-
+const { processVideoJob } = require("../services/videoWorker");
 const router = express.Router();
 
 const client = new OpenAI({
@@ -58,7 +58,7 @@ router.post("/generate", async (req, res) => {
     updateJob(job.id, {
       status: "queued"
     });
-
+    processVideoJob(job.id);
     res.json({
       success: true,
       message: "Video job created.",
