@@ -82,9 +82,17 @@ async function processVideoJob(jobId) {
       const completedVideo = await waitForVideo(video.id);
 
       updateJob(jobId, {
-        completedScenes: i + 1,
-        lastVideoId: completedVideo.id
-      });
+  completedScenes: i + 1,
+  lastVideoId: completedVideo.id,
+  sceneVideos: [
+    ...job.sceneVideos,
+    {
+      sceneNumber: scene.sceneNumber,
+      videoId: completedVideo.id,
+      status: "completed"
+    }
+  ]
+});
 
       console.log(
         `Scene ${scene.sceneNumber} completed`
