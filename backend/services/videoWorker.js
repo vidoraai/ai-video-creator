@@ -98,9 +98,13 @@ async function processVideoJob(jobId) {
         `Scene ${scene.sceneNumber} completed`
       );
 
-      // We will add scene storage and video assembly next.
-      break;
-    }
+      if (i === job.scenes.length - 1) {
+  updateJob(jobId, {
+    status: "completed"
+  });
+
+  console.log(`Video job ${jobId} completed`);
+}    }
 
   } catch (error) {
     console.error("Video worker error:", error);
