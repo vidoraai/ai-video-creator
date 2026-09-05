@@ -19,30 +19,48 @@ async function processVideoJob(jobId) {
 
   try {
     updateJob(jobId, {
-      status: "generating"
-    });
-
-    const firstScene = job.scenes[0];
-
-    const video = await client.videos.create({
-      model: "sora-2",
-      prompt: firstScene.prompt,
-      seconds: 4,
-      size:
-        job.aspectRatio === "9:16"
-          ? "720x1280"
-          : "1280x720"
-    });
-
-    updateJob(jobId, {
-      status: video.status,
-      videoId: video.id,
+      status: "generating",
       completedScenes: 0
     });
 
     console.log(
-      `Video generation started for job ${jobId}: ${video.id}`
+      `Starting video job ${jobId} with ${job.sceneCount} scenes`
     );
+
+    // Process scenes one at a time.
+    for (let i = 0; i < job.scenes.length; i++) {
+      const scene = job.scenes[i];
+
+      console.log(
+        `Generating scene ${scene.sceneNumber} of ${job.sceneCount}`
+      );
+
+      const video = await client.videos.create({
+        model: "sora-2",
+        prompt: scene.prompt,
+        seconds: 4,
+        size:
+          job.aspectRatio === "9:16"
+            ? "720x1280"
+            : "1280x720"
+      });
+
+      updateJob(jobId, {
+        status: "generating",
+        currentScene: scene.sceneNumber,
+        lastVideoId: video.id,
+        completedScenes: i + 1
+      });
+
+      console.log(
+        `Scene ${scene.sceneNumber} started: ${video.id}`
+      );
+
+      // Stop here for now.
+      // We will add video completion checking
+      // and final video assembly next.
+      break;
+    }
 
   } catch (error) {
     console.error("Video worker error:", error);
