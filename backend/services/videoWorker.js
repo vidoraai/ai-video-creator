@@ -9,6 +9,35 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForVideo(videoId) {
+  while (true) {
+    const video = await client.videos.retrieve(videoId);
+
+    console.log(
+      `Video ${videoId} status: ${video.status}`
+    );
+
+    if (video.status === "completed") {
+      return video;
+    }
+
+    if (
+      video.status === "failed" ||
+      video.status === "cancelled"
+    ) {
+      throw new Error(
+        `Video generation ${video.status}`
+      );
+    }
+
+    await wait(5000);
+  }
+}
+
 async function processVideoJob(jobId) {
   const job = getJob(jobId);
 
@@ -27,7 +56,6 @@ async function processVideoJob(jobId) {
       `Starting video job ${jobId} with ${job.sceneCount} scenes`
     );
 
-    // Process scenes one at a time.
     for (let i = 0; i < job.scenes.length; i++) {
       const scene = job.scenes[i];
 
@@ -48,17 +76,21 @@ async function processVideoJob(jobId) {
       updateJob(jobId, {
         status: "generating",
         currentScene: scene.sceneNumber,
-        lastVideoId: video.id,
-        completedScenes: i + 1
+        lastVideoId: video.id
+      });
+
+      const completedVideo = await waitForVideo(video.id);
+
+      updateJob(jobId, {
+        completedScenes: i + 1,
+        lastVideoId: completedVideo.id
       });
 
       console.log(
-        `Scene ${scene.sceneNumber} started: ${video.id}`
+        `Scene ${scene.sceneNumber} completed`
       );
 
-      // Stop here for now.
-      // We will add video completion checking
-      // and final video assembly next.
+      // We will add scene storage and video assembly next.
       break;
     }
 
