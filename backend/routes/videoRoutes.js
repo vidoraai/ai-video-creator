@@ -1,10 +1,12 @@
 const express = require("express");
 const OpenAI = require("openai");
+
 const {
   createJob,
   getJob,
   updateJob
 } = require("../services/videoJobService");
+
 const router = express.Router();
 
 const client = new OpenAI({
@@ -43,79 +45,63 @@ router.post("/generate", async (req, res) => {
       })
     );
 
-    const video = await client.videos.create({
-      model: "sora-2",
-      prompt: scenes[0].prompt,
-      seconds: 4,
-      size:
-        aspectRatio === "9:16"
-          ? "720x1280"
-          : "1280x720"
-    });
-
-    res.json({
-      success: true,
-      message: "Video generation started.",
-      id: video.id,
-      status: video.status,
+    const job = createJob({
+      prompt: prompt.trim(),
       totalDuration,
       sceneDuration,
       sceneCount,
-      scenes
+      scenes,
+      aspectRatio,
+      style
     });
 
-  } catch (error) {
-    console.error("Video generation error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to start video generation.",
-      error: error.message
+    updateJob(job.id, {
+      status: "queued"
     });
-  }
-});
-
-router.get("/:id/content", async (req, res) => {
-  try {
-    const response =
-      await client.videos.downloadContent(req.params.id);
-
-    const buffer =
-      Buffer.from(await response.arrayBuffer());
-
-    res.set("Content-Type", "video/mp4");
-    res.send(buffer);
-
-  } catch (error) {
-    console.error("Video content error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to download video.",
-      error: error.message
-    });
-  }
-});
-
-router.get("/:id", async (req, res) => {
-  try {
-    const video =
-      await client.videos.retrieve(req.params.id);
 
     res.json({
       success: true,
-      id: video.id,
-      status: video.status,
-      progress: video.progress,
-      video
+      message: "Video job created.",
+      jobId: job.id,
+      status: job.status,
+      totalDuration,
+      sceneDuration,
+      sceneCount
     });
 
   } catch (error) {
-    console.error("Video status error:", error);
+    console.error("Video job error:", error);
 
     res.status(500).json({
       success: false,
-      message: "Failed to check video status.",
+      message: "Failed to create video job.",
+      error: error.message
+    });
+  }
+});
+
+router.get("/job/:id", (req, res) => {
+  try {
+    const job = getJob(req.params.id);
+
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        message: "Video job not found."
+      });
+    }
+
+    res.json({
+      success: true,
+      job
+    });
+
+  } catch (error) {
+    console.error("Job status error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to get job status.",
       error: error.message
     });
   }
