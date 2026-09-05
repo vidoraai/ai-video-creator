@@ -40,16 +40,19 @@ async function waitForVideo(videoId) {
 
 async function processVideoJob(jobId) {
   const job = getJob(jobId);
-const sceneVideos = [];
+
   if (!job) {
     console.error("Job not found:", jobId);
     return;
   }
 
+  const sceneVideos = [];
+
   try {
     updateJob(jobId, {
       status: "generating",
-      completedScenes: 0
+      completedScenes: 0,
+      sceneVideos: []
     });
 
     console.log(
@@ -81,33 +84,36 @@ const sceneVideos = [];
 
       const completedVideo = await waitForVideo(video.id);
 
+      sceneVideos.push({
+        sceneNumber: scene.sceneNumber,
+        videoId: completedVideo.id,
+        status: "completed"
+      });
+
       updateJob(jobId, {
-  completedScenes: i + 1,
-  lastVideoId: completedVideo.id,
- sceneVideos: [
-  ...sceneVideos,
-  {
-    sceneNumber: scene.sceneNumber,
-    videoId: completedVideo.id,
-    status: "completed"
-  }
-]
-});
+        completedScenes: i + 1,
+        lastVideoId: completedVideo.id,
+        sceneVideos: sceneVideos
+      });
 
       console.log(
         `Scene ${scene.sceneNumber} completed`
       );
+    }
 
-      if (i === job.scenes.length - 1) {
-  updateJob(jobId, {
-    status: "completed"
-  });
+    updateJob(jobId, {
+      status: "completed"
+    });
 
-  console.log(`Video job ${jobId} completed`);
-}    }
+    console.log(
+      `Video job ${jobId} completed`
+    );
 
   } catch (error) {
-    console.error("Video worker error:", error);
+    console.error(
+      "Video worker error:",
+      error
+    );
 
     updateJob(jobId, {
       status: "failed",
