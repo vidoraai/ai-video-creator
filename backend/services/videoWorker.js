@@ -1,6 +1,4 @@
 const OpenAI = require("openai");
-const path = require("path");
-const os = require("os");
 
 const {
   getJob,
@@ -10,6 +8,10 @@ const {
 const {
   assembleVideos
 } = require("./videoAssembler");
+
+const {
+  getVideoPath
+} = require("./videoStorage");
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -116,10 +118,8 @@ async function processVideoJob(jobId) {
       `Assembling ${sceneVideos.length} scenes`
     );
 
-    const outputPath = path.join(
-      os.tmpdir(),
-      `${jobId}.mp4`
-    );
+    const outputPath =
+      getVideoPath(jobId);
 
     await assembleVideos(
       sceneVideos,
