@@ -1,9 +1,15 @@
 const OpenAI = require("openai");
+const path = require("path");
+const os = require("os");
 
 const {
   getJob,
   updateJob
 } = require("./videoJobService");
+
+const {
+  assembleVideos
+} = require("./videoAssembler");
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -82,7 +88,8 @@ async function processVideoJob(jobId) {
         lastVideoId: video.id
       });
 
-      const completedVideo = await waitForVideo(video.id);
+      const completedVideo =
+        await waitForVideo(video.id);
 
       sceneVideos.push({
         sceneNumber: scene.sceneNumber,
@@ -102,7 +109,26 @@ async function processVideoJob(jobId) {
     }
 
     updateJob(jobId, {
-      status: "completed"
+      status: "assembling"
+    });
+
+    console.log(
+      `Assembling ${sceneVideos.length} scenes`
+    );
+
+    const outputPath = path.join(
+      os.tmpdir(),
+      `${jobId}.mp4`
+    );
+
+    await assembleVideos(
+      sceneVideos,
+      outputPath
+    );
+
+    updateJob(jobId, {
+      status: "completed",
+      finalVideoPath: outputPath
     });
 
     console.log(
