@@ -6,13 +6,21 @@ function createJob(data) {
   const job = {
     id: jobId,
     status: "planning",
+
     prompt: data.prompt,
+
     totalDuration: data.totalDuration,
     sceneDuration: data.sceneDuration,
     sceneCount: data.sceneCount,
+
+    aspectRatio: data.aspectRatio || "16:9",
+    style: data.style || "cinematic",
+
     scenes: data.scenes || [],
+
     completedScenes: 0,
     sceneVideos: [],
+
     createdAt: new Date().toISOString()
   };
 
