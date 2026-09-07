@@ -11,6 +11,13 @@ const {
   processVideoJob
 } = require("../services/videoWorker");
 
+const {
+  addVideoToHistory,
+  updateVideoHistory,
+  getVideoHistory,
+  getHistoryItem
+} = require("../services/videoHistoryService");
+
 const router = express.Router();
 
 
@@ -59,17 +66,11 @@ router.post("/generate", async (req, res) => {
 
     const job = createJob({
       prompt: prompt.trim(),
-
       totalDuration,
-
       sceneDuration,
-
       sceneCount,
-
       scenes,
-
       aspectRatio,
-
       style
     });
 
@@ -77,24 +78,22 @@ router.post("/generate", async (req, res) => {
       status: "queued"
     });
 
-    // Start the video worker
-    // without blocking the request.
+    // Add the new video to history
+    addVideoToHistory({
+      ...job,
+      status: "queued"
+    });
+
+    // Start video processing
     processVideoJob(job.id);
 
     res.json({
       success: true,
-
-      message:
-        "Video job created.",
-
+      message: "Video job created.",
       jobId: job.id,
-
       status: "queued",
-
       totalDuration,
-
       sceneDuration,
-
       sceneCount
     });
 
@@ -107,10 +106,7 @@ router.post("/generate", async (req, res) => {
 
     res.status(500).json({
       success: false,
-
-      message:
-        "Failed to create video job.",
-
+      message: "Failed to create video job.",
       error: error.message
     });
   }
@@ -118,7 +114,7 @@ router.post("/generate", async (req, res) => {
 
 
 // ==========================================
-// CHECK VIDEO JOB STATUS
+// GET VIDEO JOB
 // ==========================================
 
 router.get("/job/:id", (req, res) => {
@@ -131,17 +127,15 @@ router.get("/job/:id", (req, res) => {
     if (!job) {
       return res.status(404).json({
         success: false,
-
-        message:
-          "Video job not found."
+        message: "Video job not found."
       });
     }
 
+    // Keep history updated
+    updateVideoHistory(job);
 
     let videoUrl = null;
-
     let downloadUrl = null;
-
 
     if (
       job.status === "completed"
@@ -154,17 +148,11 @@ router.get("/job/:id", (req, res) => {
         `/api/videos/job/${job.id}/download`;
     }
 
-
     res.json({
-
       success: true,
-
       job,
-
       videoUrl,
-
       downloadUrl
-
     });
 
   } catch (error) {
@@ -176,10 +164,79 @@ router.get("/job/:id", (req, res) => {
 
     res.status(500).json({
       success: false,
+      message: "Failed to get video job.",
+      error: error.message
+    });
+  }
+});
 
-      message:
-        "Failed to get job status.",
 
+// ==========================================
+// GET VIDEO HISTORY
+// ==========================================
+
+router.get("/history", (req, res) => {
+  try {
+
+    const history =
+      getVideoHistory();
+
+    res.json({
+      success: true,
+      count: history.length,
+      history
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Video history error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to get video history.",
+      error: error.message
+    });
+  }
+});
+
+
+// ==========================================
+// GET ONE HISTORY ITEM
+// ==========================================
+
+router.get("/history/:id", (req, res) => {
+  try {
+
+    const item =
+      getHistoryItem(
+        req.params.id
+      );
+
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: "Video history item not found."
+      });
+    }
+
+    res.json({
+      success: true,
+      video: item
+    });
+
+  } catch (error) {
+
+    console.error(
+      "History item error:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to get video history item.",
       error: error.message
     });
   }
@@ -196,73 +253,54 @@ router.get(
 
     try {
 
-      const job = getJob(
-        req.params.id
-      );
-
+      const job =
+        getJob(req.params.id);
 
       if (!job) {
         return res.status(404).json({
           success: false,
-
-          message:
-            "Video job not found."
+          message: "Video job not found."
         });
       }
-
 
       if (
         job.status !== "completed"
       ) {
-
         return res.status(404).json({
           success: false,
-
-          message:
-            "Video is not ready yet."
+          message: "Video is not ready yet."
         });
       }
-
 
       if (!job.finalVideoPath) {
-
         return res.status(404).json({
           success: false,
-
-          message:
-            "Finished video file not found."
+          message: "Finished video file not found."
         });
       }
-
 
       if (
         !fs.existsSync(
           job.finalVideoPath
         )
       ) {
-
         return res.status(404).json({
           success: false,
-
           message:
             "Finished video file is no longer available."
         });
       }
-
 
       const stat =
         fs.statSync(
           job.finalVideoPath
         );
 
-
       const range =
         req.headers.range;
 
 
-      // --------------------------------------
-      // VIDEO RANGE REQUEST
-      // --------------------------------------
+      // Handle video seeking/range requests
 
       if (range) {
 
@@ -274,13 +312,11 @@ router.get(
             )
             .split("-");
 
-
         const start =
           parseInt(
             parts[0],
             10
           );
-
 
         const end =
           parts[1]
@@ -290,10 +326,8 @@ router.get(
               )
             : stat.size - 1;
 
-
         const chunkSize =
           end - start + 1;
-
 
         const stream =
           fs.createReadStream(
@@ -303,7 +337,6 @@ router.get(
               end
             }
           );
-
 
         res.writeHead(
           206,
@@ -322,16 +355,13 @@ router.get(
           }
         );
 
-
         stream.pipe(res);
 
         return;
       }
 
 
-      // --------------------------------------
-      // NORMAL VIDEO REQUEST
-      // --------------------------------------
+      // Normal video request
 
       res.writeHead(
         200,
@@ -347,11 +377,9 @@ router.get(
         }
       );
 
-
       fs.createReadStream(
         job.finalVideoPath
       ).pipe(res);
-
 
     } catch (error) {
 
@@ -360,13 +388,9 @@ router.get(
         error
       );
 
-
       res.status(500).json({
         success: false,
-
-        message:
-          "Unable to stream video.",
-
+        message: "Unable to stream video.",
         error: error.message
       });
     }
@@ -384,66 +408,48 @@ router.get(
 
     try {
 
-      const job = getJob(
-        req.params.id
-      );
-
+      const job =
+        getJob(req.params.id);
 
       if (!job) {
         return res.status(404).json({
           success: false,
-
-          message:
-            "Video job not found."
+          message: "Video job not found."
         });
       }
-
 
       if (
         job.status !== "completed"
       ) {
-
         return res.status(404).json({
           success: false,
-
-          message:
-            "Video is not ready yet."
+          message: "Video is not ready yet."
         });
       }
-
 
       if (!job.finalVideoPath) {
-
         return res.status(404).json({
           success: false,
-
-          message:
-            "Finished video file not found."
+          message: "Finished video file not found."
         });
       }
-
 
       if (
         !fs.existsSync(
           job.finalVideoPath
         )
       ) {
-
         return res.status(404).json({
           success: false,
-
           message:
             "Finished video file is no longer available."
         });
       }
 
-
       res.download(
         job.finalVideoPath,
-
         `${req.params.id}.mp4`
       );
-
 
     } catch (error) {
 
@@ -452,13 +458,9 @@ router.get(
         error
       );
 
-
       res.status(500).json({
         success: false,
-
-        message:
-          "Unable to download video.",
-
+        message: "Unable to download video.",
         error: error.message
       });
     }
