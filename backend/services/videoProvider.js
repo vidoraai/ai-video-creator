@@ -1,55 +1,31 @@
-const OpenAI = require("openai");
+const {
+  getVideoProvider
+} = require("./videoProviders");
 
 
 // ==========================================
-// PROVIDER CONFIGURATION
+// GET ACTIVE VIDEO PROVIDER
 // ==========================================
 
-const VIDEO_PROVIDER =
-  process.env.VIDORA_VIDEO_PROVIDER || "openai";
+function getProvider() {
 
+  return getVideoProvider();
 
-// ==========================================
-// OPENAI CLIENT
-// ==========================================
-
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+}
 
 
 // ==========================================
 // CREATE VIDEO
 // ==========================================
 
-async function createVideo({
-  prompt,
-  seconds,
-  size
-}) {
+async function createVideo(data) {
 
-  if (VIDEO_PROVIDER !== "openai") {
+  const provider =
+    getProvider();
 
-    throw new Error(
-      `Unsupported video provider: ${VIDEO_PROVIDER}`
-    );
-
-  }
-
-  const video =
-    await client.videos.create({
-
-      model: "sora-2",
-
-      prompt,
-
-      seconds,
-
-      size
-
-    });
-
-  return video;
+  return provider.createVideo(
+    data
+  );
 
 }
 
@@ -62,20 +38,12 @@ async function getVideoStatus(
   videoId
 ) {
 
-  if (VIDEO_PROVIDER !== "openai") {
+  const provider =
+    getProvider();
 
-    throw new Error(
-      `Unsupported video provider: ${VIDEO_PROVIDER}`
-    );
-
-  }
-
-  const video =
-    await client.videos.retrieve(
-      videoId
-    );
-
-  return video;
+  return provider.getVideoStatus(
+    videoId
+  );
 
 }
 
@@ -88,36 +56,26 @@ async function downloadVideo(
   videoId
 ) {
 
-  if (VIDEO_PROVIDER !== "openai") {
+  const provider =
+    getProvider();
 
-    throw new Error(
-      `Unsupported video provider: ${VIDEO_PROVIDER}`
-    );
-
-  }
-
-  const response =
-    await client.videos.downloadContent(
-      videoId
-    );
-
-  const buffer =
-    Buffer.from(
-      await response.arrayBuffer()
-    );
-
-  return buffer;
+  return provider.downloadVideo(
+    videoId
+  );
 
 }
 
 
 // ==========================================
-// PROVIDER INFORMATION
+// PROVIDER NAME
 // ==========================================
 
 function getProviderName() {
 
-  return VIDEO_PROVIDER;
+  const provider =
+    getProvider();
+
+  return provider.getProviderName();
 
 }
 
