@@ -1,6 +1,6 @@
 const {
   getVideoProvider
-} = require("./videoProviders");
+} = require("./videoProviders/index.js");
 
 
 // ==========================================
