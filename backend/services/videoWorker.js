@@ -5,7 +5,8 @@ const {
 
 const {
   createVideo,
-  getVideoStatus
+  getVideoStatus,
+  getProviderName
 } = require("./videoProvider");
 
 const {
@@ -18,27 +19,37 @@ const {
 
 
 // ==========================================
-// WAIT FOR VIDEO
+// WAIT
 // ==========================================
 
 function wait(ms) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+
+  return new Promise(
+    (resolve) =>
+      setTimeout(resolve, ms)
+  );
+
 }
 
 
-async function waitForVideo(videoId) {
+// ==========================================
+// WAIT FOR VIDEO
+// ==========================================
+
+async function waitForVideo(
+  videoId
+) {
 
   while (true) {
 
     const video =
-      await getVideoStatus(videoId);
+      await getVideoStatus(
+        videoId
+      );
 
     console.log(
       `Video ${videoId} status: ${video.status}`
     );
-
 
     if (
       video.status === "completed"
@@ -47,7 +58,6 @@ async function waitForVideo(videoId) {
       return video;
 
     }
-
 
     if (
       video.status === "failed" ||
@@ -60,10 +70,10 @@ async function waitForVideo(videoId) {
 
     }
 
-
     await wait(5000);
 
   }
+
 }
 
 
@@ -71,11 +81,12 @@ async function waitForVideo(videoId) {
 // PROCESS VIDEO JOB
 // ==========================================
 
-async function processVideoJob(jobId) {
+async function processVideoJob(
+  jobId
+) {
 
   const job =
     getJob(jobId);
-
 
   if (!job) {
 
@@ -88,19 +99,23 @@ async function processVideoJob(jobId) {
 
   }
 
-
   const sceneVideos = [];
-
 
   try {
 
     updateJob(jobId, {
 
-      status: "generating",
+      status:
+        "generating",
 
-      completedScenes: 0,
+      completedScenes:
+        0,
 
-      sceneVideos: []
+      sceneVideos:
+        [],
+
+      provider:
+        getProviderName()
 
     });
 
@@ -109,10 +124,6 @@ async function processVideoJob(jobId) {
       `Starting video job ${jobId} with ${job.sceneCount} scenes`
     );
 
-
-    // ======================================
-    // GENERATE EACH SCENE
-    // ======================================
 
     for (
       let i = 0;
@@ -203,10 +214,6 @@ async function processVideoJob(jobId) {
     }
 
 
-    // ======================================
-    // ASSEMBLE FINAL VIDEO
-    // ======================================
-
     updateJob(jobId, {
 
       status:
@@ -221,21 +228,16 @@ async function processVideoJob(jobId) {
 
 
     const outputPath =
-      getVideoPath(jobId);
+      getVideoPath(
+        jobId
+      );
 
 
     await assembleVideos(
-
       sceneVideos,
-
       outputPath
-
     );
 
-
-    // ======================================
-    // JOB COMPLETE
-    // ======================================
 
     updateJob(jobId, {
 
@@ -275,10 +277,6 @@ async function processVideoJob(jobId) {
 
 }
 
-
-// ==========================================
-// EXPORT
-// ==========================================
 
 module.exports = {
 
