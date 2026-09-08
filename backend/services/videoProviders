@@ -1,34 +1,95 @@
 const OpenAI = require("openai");
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+
+// ==========================================
+// GET OPENAI CLIENT
+// ==========================================
+
+function getClient() {
+
+  if (!process.env.OPENAI_API_KEY) {
+
+    throw new Error(
+      "OpenAI video provider is not configured."
+    );
+
+  }
+
+  return new OpenAI({
+    apiKey:
+      process.env.OPENAI_API_KEY
+  });
+
+}
+
+
+// ==========================================
+// CREATE VIDEO
+// ==========================================
 
 async function createVideo({
   prompt,
   seconds,
   size
 }) {
-  const video = await client.videos.create({
-    model: "sora-2",
-    prompt,
-    seconds,
-    size
-  });
 
-  return video;
-}
+  const client =
+    getClient();
 
-async function getVideoStatus(videoId) {
   const video =
-    await client.videos.retrieve(videoId);
+    await client.videos.create({
+
+      model: "sora-2",
+
+      prompt,
+
+      seconds,
+
+      size
+
+    });
 
   return video;
+
 }
 
-async function downloadVideo(videoId) {
+
+// ==========================================
+// GET VIDEO STATUS
+// ==========================================
+
+async function getVideoStatus(
+  videoId
+) {
+
+  const client =
+    getClient();
+
+  const video =
+    await client.videos.retrieve(
+      videoId
+    );
+
+  return video;
+
+}
+
+
+// ==========================================
+// DOWNLOAD VIDEO
+// ==========================================
+
+async function downloadVideo(
+  videoId
+) {
+
+  const client =
+    getClient();
+
   const response =
-    await client.videos.downloadContent(videoId);
+    await client.videos.downloadContent(
+      videoId
+    );
 
   const buffer =
     Buffer.from(
@@ -36,15 +97,33 @@ async function downloadVideo(videoId) {
     );
 
   return buffer;
+
 }
+
+
+// ==========================================
+// PROVIDER NAME
+// ==========================================
 
 function getProviderName() {
+
   return "openai";
+
 }
 
+
+// ==========================================
+// EXPORTS
+// ==========================================
+
 module.exports = {
+
   createVideo,
+
   getVideoStatus,
+
   downloadVideo,
+
   getProviderName
+
 };
