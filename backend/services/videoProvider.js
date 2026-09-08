@@ -1,5 +1,18 @@
 const OpenAI = require("openai");
 
+
+// ==========================================
+// PROVIDER CONFIGURATION
+// ==========================================
+
+const VIDEO_PROVIDER =
+  process.env.VIDORA_VIDEO_PROVIDER || "openai";
+
+
+// ==========================================
+// OPENAI CLIENT
+// ==========================================
+
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
@@ -15,19 +28,29 @@ async function createVideo({
   size
 }) {
 
-  const video = await client.videos.create({
+  if (VIDEO_PROVIDER !== "openai") {
 
-    model: "sora-2",
+    throw new Error(
+      `Unsupported video provider: ${VIDEO_PROVIDER}`
+    );
 
-    prompt,
+  }
 
-    seconds,
+  const video =
+    await client.videos.create({
 
-    size
+      model: "sora-2",
 
-  });
+      prompt,
+
+      seconds,
+
+      size
+
+    });
 
   return video;
+
 }
 
 
@@ -39,12 +62,21 @@ async function getVideoStatus(
   videoId
 ) {
 
+  if (VIDEO_PROVIDER !== "openai") {
+
+    throw new Error(
+      `Unsupported video provider: ${VIDEO_PROVIDER}`
+    );
+
+  }
+
   const video =
     await client.videos.retrieve(
       videoId
     );
 
   return video;
+
 }
 
 
@@ -55,6 +87,14 @@ async function getVideoStatus(
 async function downloadVideo(
   videoId
 ) {
+
+  if (VIDEO_PROVIDER !== "openai") {
+
+    throw new Error(
+      `Unsupported video provider: ${VIDEO_PROVIDER}`
+    );
+
+  }
 
   const response =
     await client.videos.downloadContent(
@@ -67,6 +107,7 @@ async function downloadVideo(
     );
 
   return buffer;
+
 }
 
 
@@ -76,7 +117,8 @@ async function downloadVideo(
 
 function getProviderName() {
 
-  return "openai";
+  return VIDEO_PROVIDER;
+
 }
 
 
