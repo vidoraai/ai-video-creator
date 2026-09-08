@@ -1,0 +1,50 @@
+const OpenAI = require("openai");
+
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+async function createVideo({
+  prompt,
+  seconds,
+  size
+}) {
+  const video = await client.videos.create({
+    model: "sora-2",
+    prompt,
+    seconds,
+    size
+  });
+
+  return video;
+}
+
+async function getVideoStatus(videoId) {
+  const video =
+    await client.videos.retrieve(videoId);
+
+  return video;
+}
+
+async function downloadVideo(videoId) {
+  const response =
+    await client.videos.downloadContent(videoId);
+
+  const buffer =
+    Buffer.from(
+      await response.arrayBuffer()
+    );
+
+  return buffer;
+}
+
+function getProviderName() {
+  return "openai";
+}
+
+module.exports = {
+  createVideo,
+  getVideoStatus,
+  downloadVideo,
+  getProviderName
+};
