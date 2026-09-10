@@ -3,7 +3,7 @@ const OpenAI = require("openai");
 function getClient() {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error(
-      "OpenAI video provider is not configured."
+      "OpenAI video provider is not configurd."
     );
   }
 
