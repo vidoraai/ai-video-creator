@@ -1,97 +1,34 @@
 const {
   getVideoProvider
-} = require("./videoProviders/index.js");
-
-
-// ==========================================
-// GET ACTIVE VIDEO PROVIDER
-// ==========================================
+} = require("./videoProviders");
 
 function getProvider() {
-
   return getVideoProvider();
-
 }
-
-
-// ==========================================
-// CREATE VIDEO
-// ==========================================
 
 async function createVideo(data) {
-
-  const provider =
-    getProvider();
-
-  return provider.createVideo(
-    data
-  );
-
+  const provider = getProvider();
+  return provider.createVideo(data);
 }
 
-
-// ==========================================
-// GET VIDEO STATUS
-// ==========================================
-
-async function getVideoStatus(
-  videoId
-) {
-
-  const provider =
-    getProvider();
-
-  return provider.getVideoStatus(
-    videoId
-  );
-
+async function getVideoStatus(videoId) {
+  const provider = getProvider();
+  return provider.getVideoStatus(videoId);
 }
 
-
-// ==========================================
-// DOWNLOAD VIDEO
-// ==========================================
-
-async function downloadVideo(
-  videoId
-) {
-
-  const provider =
-    getProvider();
-
-  return provider.downloadVideo(
-    videoId
-  );
-
+async function downloadVideo(videoId) {
+  const provider = getProvider();
+  return provider.downloadVideo(videoId);
 }
-
-
-// ==========================================
-// PROVIDER NAME
-// ==========================================
 
 function getProviderName() {
-
-  const provider =
-    getProvider();
-
+  const provider = getProvider();
   return provider.getProviderName();
-
 }
 
-
-// ==========================================
-// EXPORTS
-// ==========================================
-
 module.exports = {
-
   createVideo,
-
   getVideoStatus,
-
   downloadVideo,
-
   getProviderName
-
 };
