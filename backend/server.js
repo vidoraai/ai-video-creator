@@ -1,3 +1,4 @@
+const { testDatabaseConnection } = require("./services/database");
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
@@ -27,6 +28,21 @@ app.use("/api/videos", videoRoutes);
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, "0.0.0.0", async () => {
   console.log("Vidora AI backend running on port " + PORT);
+
+  if (process.env.DATABASE_URL) {
+    try {
+      await testDatabaseConnection();
+    } catch (error) {
+      console.error(
+        "Database connection failed:",
+        error.message
+      );
+    }
+  } else {
+    console.log(
+      "DATABASE_URL is not configured yet."
+    );
+  }
 });
