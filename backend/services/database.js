@@ -1,3 +1,5 @@
+const fs = require("fs");
+const path = require("path");
 const { Pool } = require("pg");
 
 const pool = new Pool({
@@ -22,7 +24,27 @@ async function testDatabaseConnection() {
   }
 }
 
+async function initializeDatabase() {
+  const schemaPath = path.join(
+    __dirname,
+    "..",
+    "schema.sql"
+  );
+
+  const schema = fs.readFileSync(
+    schemaPath,
+    "utf8"
+  );
+
+  await pool.query(schema);
+
+  console.log(
+    "Vidora AI database tables initialized"
+  );
+}
+
 module.exports = {
   pool,
-  testDatabaseConnection
+  testDatabaseConnection,
+  initializeDatabase
 };
