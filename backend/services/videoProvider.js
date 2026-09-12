@@ -1,5 +1,15 @@
 const OpenAI = require("openai");
 
+const TEST_VIDEO_URL =
+  "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
+
+function isTestMode() {
+  return (
+    process.env.VIDORA_VIDEO_PROVIDER ===
+    "test"
+  );
+}
+
 function getClient() {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error(
@@ -8,7 +18,8 @@ function getClient() {
   }
 
   return new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
+    apiKey:
+      process.env.OPENAI_API_KEY
   });
 }
 
@@ -17,42 +28,101 @@ async function createVideo({
   seconds,
   size
 }) {
-  const client = getClient();
+  if (isTestMode()) {
+    return {
+      id:
+        "test-video-" +
+        Date.now(),
+      status:
+        "completed",
+      prompt,
+      seconds,
+      size
+    };
+  }
 
-  const video = await client.videos.create({
-    model: "sora-2",
-    prompt,
-    seconds,
-    size
-  });
-
-  return video;
-}
-
-async function getVideoStatus(videoId) {
-  const client = getClient();
+  const client =
+    getClient();
 
   const video =
-    await client.videos.retrieve(videoId);
+    await client.videos.create({
+      model: "sora-2",
+      prompt,
+      seconds,
+      size
+    });
 
   return video;
 }
 
-async function downloadVideo(videoId) {
-  const client = getClient();
+async function getVideoStatus(
+  videoId
+) {
+  if (
+    isTestMode() ||
+    videoId.startsWith(
+      "test-video-"
+    )
+  ) {
+    return {
+      id: videoId,
+      status: "completed"
+    };
+  }
+
+  const client =
+    getClient();
+
+  const video =
+    await client.videos.retrieve(
+      videoId
+    );
+
+  return video;
+}
+
+async function downloadVideo(
+  videoId
+) {
+  if (
+    isTestMode() ||
+    videoId.startsWith(
+      "test-video-"
+    )
+  ) {
+    const response =
+      await fetch(
+        TEST_VIDEO_URL
+      );
+
+    if (!response.ok) {
+      throw new Error(
+        "Test video download failed."
+      );
+    }
+
+    return Buffer.from(
+      await response.arrayBuffer()
+    );
+  }
+
+  const client =
+    getClient();
 
   const response =
-    await client.videos.downloadContent(videoId);
+    await client.videos.downloadContent(
+      videoId
+    );
 
-  const buffer = Buffer.from(
+  return Buffer.from(
     await response.arrayBuffer()
   );
-
-  return buffer;
 }
 
 function getProviderName() {
-  return "openai";
+  return isTestMode()
+    ? "test"
+    : "openai";
 }
 
 module.exports = {
