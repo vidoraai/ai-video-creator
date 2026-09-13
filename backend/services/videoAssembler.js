@@ -13,16 +13,12 @@ const {
 // ==========================================
 
 function runFFmpeg(args) {
-
   return new Promise((resolve, reject) => {
-
     execFile(
       "ffmpeg",
       args,
       (error, stdout, stderr) => {
-
         if (error) {
-
           reject(
             new Error(
               stderr ||
@@ -34,12 +30,9 @@ function runFFmpeg(args) {
         }
 
         resolve(stdout);
-
       }
     );
-
   });
-
 }
 
 
@@ -51,7 +44,6 @@ async function downloadScene(
   videoId,
   outputPath
 ) {
-
   const buffer =
     await downloadVideo(
       videoId
@@ -61,7 +53,49 @@ async function downloadScene(
     outputPath,
     buffer
   );
+}
 
+
+// ==========================================
+// PREPARE SCENE
+// ==========================================
+
+async function prepareScene(
+  inputPath,
+  outputPath,
+  duration
+) {
+  await runFFmpeg([
+    "-y",
+
+    "-i",
+    inputPath,
+
+    "-t",
+    String(duration),
+
+    "-an",
+
+    "-vf",
+    "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+
+    "-r",
+    "30",
+
+    "-c:v",
+    "libx264",
+
+    "-preset",
+    "veryfast",
+
+    "-crf",
+    "23",
+
+    "-movflags",
+    "+faststart",
+
+    outputPath
+  ]);
 }
 
 
@@ -73,7 +107,6 @@ async function assembleVideos(
   sceneVideos,
   outputPath
 ) {
-
   const tempDir =
     fs.mkdtempSync(
       path.join(
@@ -82,14 +115,11 @@ async function assembleVideos(
       )
     );
 
-
   try {
-
-    const sceneFiles = [];
-
+    const preparedFiles = [];
 
     // ======================================
-    // DOWNLOAD ALL SCENES
+    // DOWNLOAD AND PREPARE ALL SCENES
     // ======================================
 
     for (
@@ -97,28 +127,40 @@ async function assembleVideos(
       i < sceneVideos.length;
       i++
     ) {
-
       const scene =
         sceneVideos[i];
 
+      const originalPath =
+        path.join(
+          tempDir,
+          `original-${i + 1}.mp4`
+        );
 
-      const scenePath =
+      const preparedPath =
         path.join(
           tempDir,
           `scene-${i + 1}.mp4`
         );
 
+      const duration =
+        Number(
+          scene.duration || 4
+        );
 
       await downloadScene(
         scene.videoId,
-        scenePath
+        originalPath
       );
 
-
-      sceneFiles.push(
-        scenePath
+      await prepareScene(
+        originalPath,
+        preparedPath,
+        duration
       );
 
+      preparedFiles.push(
+        preparedPath
+      );
     }
 
 
@@ -132,9 +174,8 @@ async function assembleVideos(
         "videos.txt"
       );
 
-
     const listContent =
-      sceneFiles
+      preparedFiles
         .map(
           (file) =>
             `file '${file.replace(
@@ -144,7 +185,6 @@ async function assembleVideos(
         )
         .join("\n");
 
-
     fs.writeFileSync(
       listPath,
       listContent
@@ -152,11 +192,10 @@ async function assembleVideos(
 
 
     // ======================================
-    // JOIN VIDEOS
+    // JOIN PREPARED SCENES
     // ======================================
 
     await runFFmpeg([
-
       "-y",
 
       "-f",
@@ -171,16 +210,16 @@ async function assembleVideos(
       "-c",
       "copy",
 
-      outputPath
+      "-movflags",
+      "+faststart",
 
+      outputPath
     ]);
 
 
     return outputPath;
 
-
   } finally {
-
     fs.rmSync(
       tempDir,
       {
@@ -188,9 +227,7 @@ async function assembleVideos(
         force: true
       }
     );
-
   }
-
 }
 
 
@@ -199,7 +236,5 @@ async function assembleVideos(
 // ==========================================
 
 module.exports = {
-
   assembleVideos
-
 };
