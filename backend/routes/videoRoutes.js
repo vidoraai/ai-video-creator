@@ -43,8 +43,27 @@ router.post(
         });
       }
 
+      const requestedDuration =
+        Number(duration);
+
+      if (
+        !Number.isFinite(
+          requestedDuration
+        ) ||
+        requestedDuration < 30 ||
+        requestedDuration > 3600
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Video duration must be between 30 seconds and 1 hour."
+        });
+      }
+
       const totalDuration =
-        Number(duration) || 30;
+        Math.floor(
+          requestedDuration
+        );
 
       const sceneDuration = 4;
 
@@ -61,10 +80,13 @@ router.post(
         i <= sceneCount;
         i++
       ) {
+        const elapsed =
+          (i - 1) *
+          sceneDuration;
+
         const remaining =
           totalDuration -
-          (i - 1) *
-            sceneDuration;
+          elapsed;
 
         const currentDuration =
           Math.min(
@@ -77,7 +99,10 @@ router.post(
           prompt:
             `${prompt.trim()}. ` +
             `This is scene ${i} of ${sceneCount}. ` +
-            `Maintain visual consistency with the other scenes.`,
+            `Maintain the same characters, ` +
+            `environment, visual style, ` +
+            `lighting, and overall continuity ` +
+            `throughout the video.`,
           duration:
             currentDuration
         });
@@ -375,7 +400,9 @@ router.get(
 
       if (
         Number.isNaN(start) ||
+        start < 0 ||
         start >= fileSize ||
+        end < start ||
         end >= fileSize
       ) {
         res.status(416);
