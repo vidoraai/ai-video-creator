@@ -6,8 +6,7 @@ const {
 
 const {
   createVideo,
-  getVideoStatus,
-  getProviderName
+  getVideoStatus
 } = require("./videoProvider");
 
 const {
@@ -18,11 +17,6 @@ const {
   getVideoPath
 } = require("./videoStorage");
 
-
-// ==========================================
-// WAIT
-// ==========================================
-
 function wait(ms) {
   return new Promise(
     (resolve) =>
@@ -30,15 +24,8 @@ function wait(ms) {
   );
 }
 
-
-// ==========================================
-// WAIT FOR VIDEO
-// ==========================================
-
 async function waitForVideo(videoId) {
-
   while (true) {
-
     const video =
       await getVideoStatus(videoId);
 
@@ -46,136 +33,88 @@ async function waitForVideo(videoId) {
       `Video ${videoId} status: ${video.status}`
     );
 
-
     if (
       video.status === "completed"
     ) {
-
       return video;
     }
-
 
     if (
       video.status === "failed" ||
       video.status === "cancelled"
     ) {
-
       throw new Error(
         `Video generation ${video.status}`
       );
     }
 
-
     await wait(5000);
   }
 }
 
-
-// ==========================================
-// PROCESS VIDEO JOB
-// ==========================================
-
 async function processVideoJob(jobId) {
-
   const job =
     await getJob(jobId);
 
-
   if (!job) {
-
     console.error(
       "Job not found:",
       jobId
     );
-
     return;
   }
 
-
   const sceneVideos = [];
 
-
   try {
-
-    // --------------------------------------
-    // Start generation
-    // --------------------------------------
-
     await updateJob(
       jobId,
       {
-        status:
-          "generating",
-
-        completedScenes:
-          0,
-
-        currentScene:
-          1
+        status: "generating",
+        completedScenes: 0,
+        currentScene: 1
       }
     );
-
 
     console.log(
       `Starting video job ${jobId} with ${job.sceneCount} scenes`
     );
-
-
-    // --------------------------------------
-    // Generate each scene
-    // --------------------------------------
 
     for (
       let i = 0;
       i < job.scenes.length;
       i++
     ) {
-
       const scene =
         job.scenes[i];
-
 
       console.log(
         `Generating scene ${scene.sceneNumber} of ${job.sceneCount}`
       );
 
-
-      // Mark scene as generating
       await updateScene(
         jobId,
         scene.sceneNumber,
         {
-          status:
-            "generating"
+          status: "generating"
         }
       );
-
 
       await updateJob(
         jobId,
         {
-          status:
-            "generating",
-
+          status: "generating",
           currentScene:
             scene.sceneNumber
         }
       );
 
-
-      // ------------------------------------
-      // Create video
-      // ------------------------------------
-
       const video =
         await createVideo({
-
           prompt:
             scene.prompt,
-
           seconds:
             scene.duration,
-
           size:
             job.aspectRatio === "9:16"
               ? "720x1280"
@@ -184,64 +123,40 @@ async function processVideoJob(jobId) {
                 : "1280x720"
         });
 
-
-      // Save provider video ID
       await updateScene(
         jobId,
         scene.sceneNumber,
         {
-          status:
-            "processing",
-
-          videoId:
-            video.id
+          status: "processing",
+          videoId: video.id
         }
       );
-
-
-      // ------------------------------------
-      // Wait for completion
-      // ------------------------------------
 
       const completedVideo =
         await waitForVideo(
           video.id
         );
 
-
-      // ------------------------------------
-      // Mark scene completed
-      // ------------------------------------
-
       await updateScene(
         jobId,
         scene.sceneNumber,
         {
-          status:
-            "completed",
-
+          status: "completed",
           videoId:
             completedVideo.id
         }
       );
 
-
       sceneVideos.push({
-
         sceneNumber:
           scene.sceneNumber,
-
         videoId:
           completedVideo.id,
-
+        duration:
+          scene.duration,
         status:
           "completed"
       });
-
-
-      // ------------------------------------
-      // Update job progress
-      // ------------------------------------
 
       await updateJob(
         jobId,
@@ -251,108 +166,75 @@ async function processVideoJob(jobId) {
         }
       );
 
-
       console.log(
         `Scene ${scene.sceneNumber} completed`
       );
     }
 
-
-    // --------------------------------------
-    // Assemble final video
-    // --------------------------------------
-
     await updateJob(
       jobId,
       {
-        status:
-          "assembling"
+        status: "assembling"
       }
     );
-
 
     console.log(
       `Assembling ${sceneVideos.length} scenes`
     );
 
-
     const outputPath =
       getVideoPath(jobId);
-
 
     await assembleVideos(
       sceneVideos,
       outputPath
     );
 
-
-    // --------------------------------------
-    // Complete job
-    // --------------------------------------
-
     await updateJob(
       jobId,
       {
-        status:
-          "completed",
-
+        status: "completed",
         finalVideoPath:
           outputPath
       }
     );
 
-
     console.log(
       `Video job ${jobId} completed`
     );
 
-
   } catch (error) {
-
     console.error(
       "Video worker error:",
       error
     );
 
-
     await updateJob(
       jobId,
       {
-        status:
-          "failed",
-
+        status: "failed",
         error:
           error.message
       }
     );
 
-
-    // Try to mark the current scene failed
     const failedJob =
       await getJob(jobId);
-
 
     if (
       failedJob &&
       failedJob.currentScene
     ) {
-
       await updateScene(
         jobId,
         failedJob.currentScene,
         {
-          status:
-            "failed"
+          status: "failed"
         }
       );
     }
   }
 }
-
-
-// ==========================================
-// EXPORTS
-// ==========================================
 
 module.exports = {
   processVideoJob
