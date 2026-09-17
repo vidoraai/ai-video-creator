@@ -1,129 +1,165 @@
-const OpenAI = require("openai");
-
-const TEST_VIDEO_URL =
-  "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
-
-function isTestMode() {
-  return (
-    process.env.VIDORA_VIDEO_PROVIDER ===
-    "test"
-  );
-}
+const RunwayML = require("@runwayml/sdk");
 
 function getClient() {
-  if (!process.env.OPENAI_API_KEY) {
+  if (!process.env.RUNWAY_API_KEY) {
     throw new Error(
-      "OpenAI video provider is not configured."
+      "Runway video provider is not configured."
     );
   }
 
-  return new OpenAI({
-    apiKey:
-      process.env.OPENAI_API_KEY
+  return new RunwayML({
+    apiKey: process.env.RUNWAY_API_KEY
   });
 }
+
+
+// ==========================================
+// CREATE REAL AI VIDEO
+// ==========================================
 
 async function createVideo({
   prompt,
   seconds,
   size
 }) {
-  if (isTestMode()) {
+  const client = getClient();
+
+  let ratio = "1280:720";
+
+  if (size === "720x1280") {
+    ratio = "720:1280";
+  }
+
+  // Gen-4.5 supports 2–10 seconds.
+  const requestedSeconds =
+    Number(seconds);
+
+  const duration =
+    Math.max(
+      2,
+      Math.min(
+        10,
+        requestedSeconds
+      )
+    );
+
+  const task =
+    await client.imageToVideo.create({
+      model: "gen4.5",
+      promptText:
+        prompt.trim(),
+      ratio,
+      duration
+    });
+
+  return {
+    id: task.id,
+    status: "processing"
+  };
+}
+
+
+// ==========================================
+// GET VIDEO STATUS
+// ==========================================
+
+async function getVideoStatus(videoId) {
+  const client = getClient();
+
+  const task =
+    await client.tasks.retrieve(
+      videoId
+    );
+
+  if (task.status === "SUCCEEDED") {
     return {
-      id:
-        "test-video-" +
-        Date.now(),
-      status:
-        "completed",
-      prompt,
-      seconds,
-      size
+      id: videoId,
+      status: "completed",
+      output: task.output || []
     };
   }
 
-  const client =
-    getClient();
+  if (task.status === "FAILED") {
+    return {
+      id: videoId,
+      status: "failed",
+      error:
+        task.failure ||
+        task.failureCode ||
+        "Runway video generation failed."
+    };
+  }
 
-  const video =
-    await client.videos.create({
-      model: "sora-2",
-      prompt,
-      seconds,
-      size
-    });
-
-  return video;
-}
-
-async function getVideoStatus(
-  videoId
-) {
   if (
-    isTestMode() ||
-    videoId.startsWith(
-      "test-video-"
-    )
+    task.status === "CANCELED" ||
+    task.status === "CANCELLED"
   ) {
     return {
       id: videoId,
-      status: "completed"
+      status: "cancelled"
     };
   }
 
-  const client =
-    getClient();
+  return {
+    id: videoId,
+    status: "processing"
+  };
+}
 
-  const video =
-    await client.videos.retrieve(
+
+// ==========================================
+// DOWNLOAD GENERATED VIDEO
+// ==========================================
+
+async function downloadVideo(videoId) {
+  const client = getClient();
+
+  const task =
+    await client.tasks.retrieve(
       videoId
     );
 
-  return video;
-}
-
-async function downloadVideo(
-  videoId
-) {
-  if (
-    isTestMode() ||
-    videoId.startsWith(
-      "test-video-"
-    )
-  ) {
-    const response =
-      await fetch(
-        TEST_VIDEO_URL
-      );
-
-    if (!response.ok) {
-      throw new Error(
-        "Test video download failed."
-      );
-    }
-
-    return Buffer.from(
-      await response.arrayBuffer()
+  if (task.status !== "SUCCEEDED") {
+    throw new Error(
+      "Runway video is not completed yet."
     );
   }
 
-  const client =
-    getClient();
+  if (
+    !task.output ||
+    !task.output[0]
+  ) {
+    throw new Error(
+      "Runway did not return a video URL."
+    );
+  }
+
+  const videoUrl =
+    task.output[0];
 
   const response =
-    await client.videos.downloadContent(
-      videoId
+    await fetch(videoUrl);
+
+  if (!response.ok) {
+    throw new Error(
+      `Unable to download Runway video: ${response.status}`
     );
+  }
 
   return Buffer.from(
     await response.arrayBuffer()
   );
 }
 
+
+// ==========================================
+// PROVIDER NAME
+// ==========================================
+
 function getProviderName() {
-  return isTestMode()
-    ? "test"
-    : "openai";
+  return "runway";
 }
+
 
 module.exports = {
   createVideo,
