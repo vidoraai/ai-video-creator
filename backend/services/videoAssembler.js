@@ -13,26 +13,28 @@ const {
 // ==========================================
 
 function runFFmpeg(args) {
-  return new Promise((resolve, reject) => {
-    execFile(
-      "ffmpeg",
-      args,
-      (error, stdout, stderr) => {
-        if (error) {
-          reject(
-            new Error(
-              stderr ||
-              error.message
-            )
-          );
+  return new Promise(
+    (resolve, reject) => {
+      execFile(
+        "ffmpeg",
+        args,
+        (error, stdout, stderr) => {
+          if (error) {
+            reject(
+              new Error(
+                stderr ||
+                error.message
+              )
+            );
 
-          return;
+            return;
+          }
+
+          resolve(stdout);
         }
-
-        resolve(stdout);
-      }
-    );
-  });
+      );
+    }
+  );
 }
 
 
@@ -105,8 +107,37 @@ async function prepareScene(
 
 async function assembleVideos(
   sceneVideos,
-  outputPath
+  outputPath,
+  targetDuration
 ) {
+  if (
+    !Array.isArray(
+      sceneVideos
+    ) ||
+    sceneVideos.length === 0
+  ) {
+    throw new Error(
+      "No scene videos were provided for assembly."
+    );
+  }
+
+
+  const requestedDuration =
+    Number(targetDuration);
+
+
+  if (
+    !Number.isFinite(
+      requestedDuration
+    ) ||
+    requestedDuration <= 0
+  ) {
+    throw new Error(
+      "A valid target video duration is required."
+    );
+  }
+
+
   const tempDir =
     fs.mkdtempSync(
       path.join(
@@ -115,12 +146,15 @@ async function assembleVideos(
       )
     );
 
+
   try {
-    const preparedFiles = [];
 
     // ======================================
-    // DOWNLOAD AND PREPARE ALL SCENES
+    // PREPARE SCENES
     // ======================================
+
+    const preparedFiles = [];
+
 
     for (
       let i = 0;
@@ -130,11 +164,13 @@ async function assembleVideos(
       const scene =
         sceneVideos[i];
 
+
       const originalPath =
         path.join(
           tempDir,
           `original-${i + 1}.mp4`
         );
+
 
       const preparedPath =
         path.join(
@@ -142,21 +178,47 @@ async function assembleVideos(
           `scene-${i + 1}.mp4`
         );
 
+
       const duration =
         Number(
-          scene.duration || 4
+          scene.duration
         );
+
+
+      if (
+        !Number.isFinite(
+          duration
+        ) ||
+        duration <= 0
+      ) {
+        throw new Error(
+          `Invalid duration for scene ${i + 1}.`
+        );
+      }
+
+
+      console.log(
+        `Downloading scene ${i + 1}/${sceneVideos.length}`
+      );
+
 
       await downloadScene(
         scene.videoId,
         originalPath
       );
 
+
+      console.log(
+        `Preparing scene ${i + 1}/${sceneVideos.length}`
+      );
+
+
       await prepareScene(
         originalPath,
         preparedPath,
         duration
       );
+
 
       preparedFiles.push(
         preparedPath
@@ -165,7 +227,7 @@ async function assembleVideos(
 
 
     // ======================================
-    // CREATE FFMPEG LIST
+    // CREATE FFMPEG CONCAT LIST
     // ======================================
 
     const listPath =
@@ -173,6 +235,7 @@ async function assembleVideos(
         tempDir,
         "videos.txt"
       );
+
 
     const listContent =
       preparedFiles
@@ -185,6 +248,7 @@ async function assembleVideos(
         )
         .join("\n");
 
+
     fs.writeFileSync(
       listPath,
       listContent
@@ -192,8 +256,20 @@ async function assembleVideos(
 
 
     // ======================================
-    // JOIN PREPARED SCENES
+    // CREATE CONCATENATED VIDEO
     // ======================================
+
+    const concatenatedPath =
+      path.join(
+        tempDir,
+        "concatenated.mp4"
+      );
+
+
+    console.log(
+      "Joining generated scenes..."
+    );
+
 
     await runFFmpeg([
       "-y",
@@ -213,13 +289,101 @@ async function assembleVideos(
       "-movflags",
       "+faststart",
 
+      concatenatedPath
+    ]);
+
+
+    // ======================================
+    // EXACT FINAL DURATION
+    // ======================================
+
+    console.log(
+      `Finalizing video at ${requestedDuration} seconds...`
+    );
+
+
+    await runFFmpeg([
+      "-y",
+
+      "-i",
+      concatenatedPath,
+
+      "-t",
+      String(
+        requestedDuration
+      ),
+
+      "-an",
+
+      "-vf",
+      "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+
+      "-r",
+      "30",
+
+      "-c:v",
+      "libx264",
+
+      "-preset",
+      "veryfast",
+
+      "-crf",
+      "23",
+
+      "-movflags",
+      "+faststart",
+
       outputPath
     ]);
+
+
+    // ======================================
+    // VERIFY OUTPUT EXISTS
+    // ======================================
+
+    if (
+      !fs.existsSync(
+        outputPath
+      )
+    ) {
+      throw new Error(
+        "FFmpeg did not create the final video."
+      );
+    }
+
+
+    const outputStats =
+      fs.statSync(
+        outputPath
+      );
+
+
+    if (
+      outputStats.size <= 0
+    ) {
+      throw new Error(
+        "Final video file is empty."
+      );
+    }
+
+
+    console.log(
+      `Final Vidora video created: ${outputPath}`
+    );
+
+    console.log(
+      `Final video size: ${outputStats.size} bytes`
+    );
 
 
     return outputPath;
 
   } finally {
+
+    // ======================================
+    // CLEAN TEMP FILES
+    // ======================================
+
     fs.rmSync(
       tempDir,
       {
