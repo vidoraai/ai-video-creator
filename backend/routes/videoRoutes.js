@@ -20,7 +20,96 @@ const {
 } = require("../services/videoWorker");
 
 
+// ==========================================
+// VIDEO GENERATION SETTINGS
+// ==========================================
+
+const MIN_VIDEO_DURATION = 30;
+const MAX_VIDEO_DURATION = 3600;
+
+const MIN_SCENE_DURATION = 2;
+const MAX_SCENE_DURATION = 10;
+
+const TARGET_SCENE_DURATION = 9;
+
+
+// ==========================================
+// CREATE SCENE PLAN
+// ==========================================
+
+function createScenePlan(
+  prompt,
+  totalDuration
+) {
+  const sceneCount =
+    Math.ceil(
+      totalDuration /
+        TARGET_SCENE_DURATION
+    );
+
+  const baseDuration =
+    Math.floor(
+      totalDuration /
+        sceneCount
+    );
+
+  const remainder =
+    totalDuration %
+    sceneCount;
+
+  const scenes = [];
+
+  for (
+    let i = 1;
+    i <= sceneCount;
+    i++
+  ) {
+    const duration =
+      baseDuration +
+      (
+        i <= remainder
+          ? 1
+          : 0
+      );
+
+    if (
+      duration <
+      MIN_SCENE_DURATION ||
+      duration >
+      MAX_SCENE_DURATION
+    ) {
+      throw new Error(
+        `Invalid scene duration generated: ${duration} seconds.`
+      );
+    }
+
+    scenes.push({
+      sceneNumber:
+        i,
+
+      prompt:
+        `${prompt.trim()}. ` +
+        `This is scene ${i} of ${sceneCount}. ` +
+        `Create a visually coherent continuation ` +
+        `of the story. Maintain consistent ` +
+        `characters, appearance, clothing, ` +
+        `environment, time of day, lighting, ` +
+        `camera style, color treatment, and ` +
+        `overall visual identity throughout ` +
+        `the entire video.`,
+
+      duration
+    });
+  }
+
+  return scenes;
+}
+
+
+// ==========================================
 // CREATE VIDEO
+// ==========================================
+
 router.post(
   "/generate",
   async (req, res) => {
@@ -31,6 +120,11 @@ router.post(
         aspectRatio,
         style
       } = req.body;
+
+
+      // ======================================
+      // VALIDATE PROMPT
+      // ======================================
 
       if (
         !prompt ||
@@ -43,6 +137,11 @@ router.post(
         });
       }
 
+
+      // ======================================
+      // VALIDATE DURATION
+      // ======================================
+
       const requestedDuration =
         Number(duration);
 
@@ -50,8 +149,10 @@ router.post(
         !Number.isFinite(
           requestedDuration
         ) ||
-        requestedDuration < 30 ||
-        requestedDuration > 3600
+        requestedDuration <
+          MIN_VIDEO_DURATION ||
+        requestedDuration >
+          MAX_VIDEO_DURATION
       ) {
         return res.status(400).json({
           success: false,
@@ -60,75 +161,75 @@ router.post(
         });
       }
 
+
       const totalDuration =
         Math.floor(
           requestedDuration
         );
 
-      const sceneDuration = 4;
 
-      const sceneCount =
-        Math.ceil(
-          totalDuration /
-            sceneDuration
+      // ======================================
+      // CREATE REAL SCENE PLAN
+      // ======================================
+
+      const scenes =
+        createScenePlan(
+          prompt,
+          totalDuration
         );
 
-      const scenes = [];
+      const sceneCount =
+        scenes.length;
 
-      for (
-        let i = 1;
-        i <= sceneCount;
-        i++
-      ) {
-        const elapsed =
-          (i - 1) *
-          sceneDuration;
 
-        const remaining =
-          totalDuration -
-          elapsed;
+      console.log(
+        `Creating ${sceneCount} scenes for ${totalDuration}-second video`
+      );
 
-        const currentDuration =
-          Math.min(
-            sceneDuration,
-            remaining
-          );
 
-        scenes.push({
-          sceneNumber: i,
-          prompt:
-            `${prompt.trim()}. ` +
-            `This is scene ${i} of ${sceneCount}. ` +
-            `Maintain the same characters, ` +
-            `environment, visual style, ` +
-            `lighting, and overall continuity ` +
-            `throughout the video.`,
-          duration:
-            currentDuration
-        });
-      }
+      // ======================================
+      // CREATE DATABASE JOB
+      // ======================================
 
       const job =
         await createJob({
           title:
             prompt.trim(),
+
           prompt:
             prompt.trim(),
+
           totalDuration,
-          sceneDuration,
+
+          sceneDuration:
+            TARGET_SCENE_DURATION,
+
           sceneCount,
+
           aspectRatio:
             aspectRatio ||
             "16:9",
+
           style:
             style ||
             "cinematic",
+
           scenes
         });
+
+
+      // ======================================
+      // ADD TO HISTORY
+      // ======================================
 
       await addVideoToHistory(
         job
       );
+
+
+      // ======================================
+      // START REAL BACKGROUND JOB
+      // ======================================
 
       processVideoJob(
         job.id
@@ -141,14 +242,23 @@ router.post(
         }
       );
 
+
+      // ======================================
+      // RETURN JOB
+      // ======================================
+
       return res.status(202).json({
         success: true,
+
         message:
           "Video request received.",
+
         status:
           "queued",
+
         jobId:
           job.id,
+
         job
       });
 
@@ -169,7 +279,10 @@ router.post(
 );
 
 
+// ==========================================
 // GET VIDEO JOB
+// ==========================================
+
 router.get(
   "/job/:id",
   async (req, res) => {
@@ -187,14 +300,17 @@ router.get(
         });
       }
 
+
       await updateVideoHistory(
         job
       );
+
 
       const response = {
         success: true,
         job
       };
+
 
       if (
         job.status ===
@@ -206,6 +322,7 @@ router.get(
         response.downloadUrl =
           `/api/videos/job/${job.id}/download`;
       }
+
 
       return res.json(
         response
@@ -228,7 +345,10 @@ router.get(
 );
 
 
+// ==========================================
 // GET VIDEO HISTORY
+// ==========================================
+
 router.get(
   "/history",
   async (req, res) => {
@@ -258,7 +378,10 @@ router.get(
 );
 
 
+// ==========================================
 // GET ONE HISTORY ITEM
+// ==========================================
+
 router.get(
   "/history/:id",
   async (req, res) => {
@@ -299,7 +422,10 @@ router.get(
 );
 
 
+// ==========================================
 // STREAM VIDEO
+// ==========================================
+
 router.get(
   "/job/:id/video",
   async (req, res) => {
@@ -317,6 +443,7 @@ router.get(
         });
       }
 
+
       if (
         job.status !==
         "completed"
@@ -327,6 +454,7 @@ router.get(
             "Video is not ready yet."
         });
       }
+
 
       if (
         !job.finalVideoPath ||
@@ -340,6 +468,7 @@ router.get(
             "Video file not found."
         });
       }
+
 
       const filePath =
         job.finalVideoPath;
@@ -355,6 +484,7 @@ router.get(
       const range =
         req.headers.range;
 
+
       res.setHeader(
         "Content-Type",
         "video/mp4"
@@ -365,16 +495,20 @@ router.get(
         "bytes"
       );
 
+
       if (!range) {
         res.setHeader(
           "Content-Length",
           fileSize
         );
 
-        return fs.createReadStream(
-          filePath
-        ).pipe(res);
+        return fs
+          .createReadStream(
+            filePath
+          )
+          .pipe(res);
       }
+
 
       const parts =
         range
@@ -384,11 +518,13 @@ router.get(
           )
           .split("-");
 
+
       const start =
         parseInt(
           parts[0],
           10
         );
+
 
       const end =
         parts[1]
@@ -397,6 +533,7 @@ router.get(
               10
             )
           : fileSize - 1;
+
 
       if (
         Number.isNaN(start) ||
@@ -415,10 +552,13 @@ router.get(
         return res.end();
       }
 
+
       const chunkSize =
         end - start + 1;
 
+
       res.status(206);
+
 
       res.setHeader(
         "Content-Range",
@@ -430,13 +570,16 @@ router.get(
         chunkSize
       );
 
-      return fs.createReadStream(
-        filePath,
-        {
-          start,
-          end
-        }
-      ).pipe(res);
+
+      return fs
+        .createReadStream(
+          filePath,
+          {
+            start,
+            end
+          }
+        )
+        .pipe(res);
 
     } catch (error) {
       console.error(
@@ -455,7 +598,10 @@ router.get(
 );
 
 
+// ==========================================
 // DOWNLOAD VIDEO
+// ==========================================
+
 router.get(
   "/job/:id/download",
   async (req, res) => {
@@ -465,6 +611,7 @@ router.get(
           req.params.id
         );
 
+
       if (!job) {
         return res.status(404).json({
           success: false,
@@ -472,6 +619,7 @@ router.get(
             "Video job not found."
         });
       }
+
 
       if (
         job.status !==
@@ -483,6 +631,7 @@ router.get(
             "Video is not ready yet."
         });
       }
+
 
       if (
         !job.finalVideoPath ||
@@ -496,6 +645,7 @@ router.get(
             "Video file not found."
         });
       }
+
 
       return res.download(
         job.finalVideoPath,
@@ -518,5 +668,9 @@ router.get(
   }
 );
 
+
+// ==========================================
+// EXPORT
+// ==========================================
 
 module.exports = router;
