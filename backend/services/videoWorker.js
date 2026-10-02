@@ -14,7 +14,8 @@ const {
 } = require("./videoAssembler");
 
 const {
-  getVideoPath
+  getVideoPath,
+  uploadVideo
 } = require("./videoStorage");
 
 
@@ -47,22 +48,12 @@ async function waitForVideo(
       `Video ${videoId} status: ${video.status}`
     );
 
-
-    // ======================================
-    // COMPLETED
-    // ======================================
-
     if (
       video.status ===
       "completed"
     ) {
       return video;
     }
-
-
-    // ======================================
-    // FAILED
-    // ======================================
 
     if (
       video.status ===
@@ -74,11 +65,6 @@ async function waitForVideo(
       );
     }
 
-
-    // ======================================
-    // CANCELLED
-    // ======================================
-
     if (
       video.status ===
       "cancelled"
@@ -87,11 +73,6 @@ async function waitForVideo(
         "Video generation was cancelled."
       );
     }
-
-
-    // ======================================
-    // STILL PROCESSING
-    // ======================================
 
     await wait(5000);
   }
@@ -110,7 +91,6 @@ async function processVideoJob(
       jobId
     );
 
-
   if (!job) {
     console.error(
       "Job not found:",
@@ -120,9 +100,7 @@ async function processVideoJob(
     return;
   }
 
-
   const sceneVideos = [];
-
 
   try {
 
@@ -143,7 +121,6 @@ async function processVideoJob(
           1
       }
     );
-
 
     console.log(
       `Starting video job ${jobId}`
@@ -171,7 +148,6 @@ async function processVideoJob(
       const scene =
         job.scenes[i];
 
-
       console.log(
         `Generating scene ${scene.sceneNumber} of ${job.sceneCount}`
       );
@@ -193,7 +169,6 @@ async function processVideoJob(
             "generating"
         }
       );
-
 
       await updateJob(
         jobId,
@@ -226,7 +201,6 @@ async function processVideoJob(
               : "1280x720"
         });
 
-
       if (
         !video ||
         !video.id
@@ -235,7 +209,6 @@ async function processVideoJob(
           `Video provider did not return a task ID for scene ${scene.sceneNumber}.`
         );
       }
-
 
       console.log(
         `Scene ${scene.sceneNumber} provider task: ${video.id}`
@@ -317,7 +290,6 @@ async function processVideoJob(
         }
       );
 
-
       console.log(
         `Scene ${scene.sceneNumber} completed`
       );
@@ -340,7 +312,6 @@ async function processVideoJob(
       }
     );
 
-
     console.log(
       `All ${sceneVideos.length} scenes generated.`
     );
@@ -351,7 +322,7 @@ async function processVideoJob(
 
 
     // ======================================
-    // FINAL OUTPUT PATH
+    // TEMPORARY LOCAL OUTPUT PATH
     // ======================================
 
     const outputPath =
@@ -372,6 +343,33 @@ async function processVideoJob(
 
 
     // ======================================
+    // UPLOAD FINAL VIDEO TO CLOUDFLARE R2
+    // ======================================
+
+    await updateJob(
+      jobId,
+      {
+        status:
+          "uploading"
+      }
+    );
+
+    console.log(
+      "Uploading final video to Cloudflare R2..."
+    );
+
+    const storageKey =
+      await uploadVideo(
+        jobId,
+        outputPath
+      );
+
+    console.log(
+      `Final video uploaded to R2: ${storageKey}`
+    );
+
+
+    // ======================================
     // COMPLETE JOB
     // ======================================
 
@@ -382,7 +380,7 @@ async function processVideoJob(
           "completed",
 
         finalVideoPath:
-          outputPath
+          storageKey
       }
     );
 
@@ -428,7 +426,6 @@ async function processVideoJob(
       await getJob(
         jobId
       );
-
 
     if (
       failedJob &&
