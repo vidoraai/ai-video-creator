@@ -10,10 +10,19 @@ const {
   HeadObjectCommand
 } = require("@aws-sdk/client-s3");
 
+const {
+  getSignedUrl
+} = require("@aws-sdk/s3-request-presigner");
+
 const storageDir = path.join(
   os.tmpdir(),
   "vidora-videos"
 );
+
+
+// ==========================================
+// LOCAL TEMPORARY STORAGE
+// ==========================================
 
 function ensureStorageDir() {
   if (!fs.existsSync(storageDir)) {
@@ -31,6 +40,11 @@ function getVideoPath(jobId) {
     `${jobId}.mp4`
   );
 }
+
+
+// ==========================================
+// R2 CONFIGURATION
+// ==========================================
 
 function getR2Config() {
   const accountId =
@@ -64,6 +78,11 @@ function getR2Config() {
   };
 }
 
+
+// ==========================================
+// R2 CLIENT
+// ==========================================
+
 function getR2Client() {
   const {
     accountId,
@@ -84,9 +103,19 @@ function getR2Client() {
   });
 }
 
+
+// ==========================================
+// R2 OBJECT KEY
+// ==========================================
+
 function getR2VideoKey(jobId) {
   return `videos/${jobId}.mp4`;
 }
+
+
+// ==========================================
+// UPLOAD VIDEO TO R2
+// ==========================================
 
 async function uploadVideo(
   jobId,
@@ -157,6 +186,11 @@ async function uploadVideo(
   return key;
 }
 
+
+// ==========================================
+// CHECK VIDEO IN R2
+// ==========================================
+
 async function videoExists(
   jobId
 ) {
@@ -198,6 +232,67 @@ async function videoExists(
     throw error;
   }
 }
+
+
+// ==========================================
+// CREATE SECURE PLAYBACK URL
+// ==========================================
+
+async function getVideoUrl(
+  jobId
+) {
+  const {
+    bucket
+  } = getR2Config();
+
+  const client =
+    getR2Client();
+
+  const key =
+    getR2VideoKey(
+      jobId
+    );
+
+  const exists =
+    await videoExists(
+      jobId
+    );
+
+  if (!exists) {
+    throw new Error(
+      "Video was not found in Cloudflare R2."
+    );
+  }
+
+  const command =
+    new GetObjectCommand({
+      Bucket:
+        bucket,
+
+      Key:
+        key,
+
+      ResponseContentType:
+        "video/mp4"
+    });
+
+  const signedUrl =
+    await getSignedUrl(
+      client,
+      command,
+      {
+        expiresIn:
+          3600
+      }
+    );
+
+  return signedUrl;
+}
+
+
+// ==========================================
+// DOWNLOAD STORED VIDEO
+// ==========================================
 
 async function downloadStoredVideo(
   jobId,
@@ -269,6 +364,11 @@ async function downloadStoredVideo(
   return outputPath;
 }
 
+
+// ==========================================
+// DELETE VIDEO FROM R2
+// ==========================================
+
 async function deleteVideo(
   jobId
 ) {
@@ -299,11 +399,17 @@ async function deleteVideo(
   );
 }
 
+
+// ==========================================
+// EXPORTS
+// ==========================================
+
 module.exports = {
   getVideoPath,
   getR2VideoKey,
   uploadVideo,
   videoExists,
+  getVideoUrl,
   downloadStoredVideo,
   deleteVideo
 };
