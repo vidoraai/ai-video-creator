@@ -1,5 +1,4 @@
 const express = require("express");
-const fs = require("fs");
 
 const router = express.Router();
 
@@ -18,6 +17,11 @@ const {
 const {
   processVideoJob
 } = require("../services/videoWorker");
+
+const {
+  getVideoUrl,
+  videoExists
+} = require("../services/videoStorage");
 
 
 // ==========================================
@@ -74,9 +78,9 @@ function createScenePlan(
 
     if (
       duration <
-      MIN_SCENE_DURATION ||
+        MIN_SCENE_DURATION ||
       duration >
-      MAX_SCENE_DURATION
+        MAX_SCENE_DURATION
     ) {
       throw new Error(
         `Invalid scene duration generated: ${duration} seconds.`
@@ -121,11 +125,6 @@ router.post(
         style
       } = req.body;
 
-
-      // ======================================
-      // VALIDATE PROMPT
-      // ======================================
-
       if (
         !prompt ||
         !prompt.trim()
@@ -136,11 +135,6 @@ router.post(
             "Video prompt is required."
         });
       }
-
-
-      // ======================================
-      // VALIDATE DURATION
-      // ======================================
 
       const requestedDuration =
         Number(duration);
@@ -161,16 +155,10 @@ router.post(
         });
       }
 
-
       const totalDuration =
         Math.floor(
           requestedDuration
         );
-
-
-      // ======================================
-      // CREATE REAL SCENE PLAN
-      // ======================================
 
       const scenes =
         createScenePlan(
@@ -181,15 +169,9 @@ router.post(
       const sceneCount =
         scenes.length;
 
-
       console.log(
         `Creating ${sceneCount} scenes for ${totalDuration}-second video`
       );
-
-
-      // ======================================
-      // CREATE DATABASE JOB
-      // ======================================
 
       const job =
         await createJob({
@@ -217,19 +199,9 @@ router.post(
           scenes
         });
 
-
-      // ======================================
-      // ADD TO HISTORY
-      // ======================================
-
       await addVideoToHistory(
         job
       );
-
-
-      // ======================================
-      // START REAL BACKGROUND JOB
-      // ======================================
 
       processVideoJob(
         job.id
@@ -241,11 +213,6 @@ router.post(
           );
         }
       );
-
-
-      // ======================================
-      // RETURN JOB
-      // ======================================
 
       return res.status(202).json({
         success: true,
@@ -300,29 +267,39 @@ router.get(
         });
       }
 
-
       await updateVideoHistory(
         job
       );
-
 
       const response = {
         success: true,
         job
       };
 
-
       if (
         job.status ===
         "completed"
       ) {
-        response.videoUrl =
-          `/api/videos/job/${job.id}/video`;
+        try {
+          const exists =
+            await videoExists(
+              job.id
+            );
 
-        response.downloadUrl =
-          `/api/videos/job/${job.id}/download`;
+          if (exists) {
+            response.videoUrl =
+              `/api/videos/job/${job.id}/video`;
+
+            response.downloadUrl =
+              `/api/videos/job/${job.id}/download`;
+          }
+        } catch (storageError) {
+          console.error(
+            "R2 video check error:",
+            storageError
+          );
+        }
       }
-
 
       return res.json(
         response
@@ -423,7 +400,7 @@ router.get(
 
 
 // ==========================================
-// STREAM VIDEO
+// STREAM / PLAY VIDEO
 // ==========================================
 
 router.get(
@@ -443,7 +420,6 @@ router.get(
         });
       }
 
-
       if (
         job.status !==
         "completed"
@@ -455,131 +431,37 @@ router.get(
         });
       }
 
-
       if (
-        !job.finalVideoPath ||
-        !fs.existsSync(
-          job.finalVideoPath
-        )
+        !job.finalVideoPath
       ) {
         return res.status(404).json({
           success: false,
           message:
-            "Video file not found."
+            "Video storage information was not found."
         });
       }
 
-
-      const filePath =
-        job.finalVideoPath;
-
-      const stat =
-        fs.statSync(
-          filePath
+      const exists =
+        await videoExists(
+          job.id
         );
 
-      const fileSize =
-        stat.size;
-
-      const range =
-        req.headers.range;
-
-
-      res.setHeader(
-        "Content-Type",
-        "video/mp4"
-      );
-
-      res.setHeader(
-        "Accept-Ranges",
-        "bytes"
-      );
-
-
-      if (!range) {
-        res.setHeader(
-          "Content-Length",
-          fileSize
-        );
-
-        return fs
-          .createReadStream(
-            filePath
-          )
-          .pipe(res);
+      if (!exists) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Video file was not found in storage."
+        });
       }
 
-
-      const parts =
-        range
-          .replace(
-            /bytes=/,
-            ""
-          )
-          .split("-");
-
-
-      const start =
-        parseInt(
-          parts[0],
-          10
+      const signedUrl =
+        await getVideoUrl(
+          job.id
         );
 
-
-      const end =
-        parts[1]
-          ? parseInt(
-              parts[1],
-              10
-            )
-          : fileSize - 1;
-
-
-      if (
-        Number.isNaN(start) ||
-        start < 0 ||
-        start >= fileSize ||
-        end < start ||
-        end >= fileSize
-      ) {
-        res.status(416);
-
-        res.setHeader(
-          "Content-Range",
-          `bytes */${fileSize}`
-        );
-
-        return res.end();
-      }
-
-
-      const chunkSize =
-        end - start + 1;
-
-
-      res.status(206);
-
-
-      res.setHeader(
-        "Content-Range",
-        `bytes ${start}-${end}/${fileSize}`
+      return res.redirect(
+        signedUrl
       );
-
-      res.setHeader(
-        "Content-Length",
-        chunkSize
-      );
-
-
-      return fs
-        .createReadStream(
-          filePath,
-          {
-            start,
-            end
-          }
-        )
-        .pipe(res);
 
     } catch (error) {
       console.error(
@@ -591,7 +473,7 @@ router.get(
         success: false,
         message:
           error.message ||
-          "Unable to stream video."
+          "Unable to play video."
       });
     }
   }
@@ -611,7 +493,6 @@ router.get(
           req.params.id
         );
 
-
       if (!job) {
         return res.status(404).json({
           success: false,
@@ -619,7 +500,6 @@ router.get(
             "Video job not found."
         });
       }
-
 
       if (
         job.status !==
@@ -632,24 +512,36 @@ router.get(
         });
       }
 
-
       if (
-        !job.finalVideoPath ||
-        !fs.existsSync(
-          job.finalVideoPath
-        )
+        !job.finalVideoPath
       ) {
         return res.status(404).json({
           success: false,
           message:
-            "Video file not found."
+            "Video storage information was not found."
         });
       }
 
+      const exists =
+        await videoExists(
+          job.id
+        );
 
-      return res.download(
-        job.finalVideoPath,
-        `vidora-video-${job.id}.mp4`
+      if (!exists) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Video file was not found in storage."
+        });
+      }
+
+      const signedUrl =
+        await getVideoUrl(
+          job.id
+        );
+
+      return res.redirect(
+        signedUrl
       );
 
     } catch (error) {
