@@ -1,6 +1,11 @@
 const express = require("express");
 
-const router = express.Router();
+const router =
+  express.Router();
+
+const {
+  requireAuth
+} = require("../middleware/authMiddleware");
 
 const {
   createJob,
@@ -113,9 +118,12 @@ function createScenePlan(
 // ==========================================
 // CREATE VIDEO
 // ==========================================
+// Authentication is required before a video
+// generation job can be created.
 
 router.post(
   "/generate",
+  requireAuth,
   async (req, res) => {
     try {
       const {
@@ -171,6 +179,10 @@ router.post(
 
       console.log(
         `Creating ${sceneCount} scenes for ${totalDuration}-second video`
+      );
+
+      console.log(
+        `Authenticated user: ${req.user.id}`
       );
 
       const job =
@@ -565,4 +577,5 @@ router.get(
 // EXPORT
 // ==========================================
 
-module.exports = router;
+module.exports =
+  router;
