@@ -134,6 +134,10 @@ async function processVideoJob(
       `Total scenes: ${job.sceneCount}`
     );
 
+    console.log(
+      `Aspect ratio: ${job.aspectRatio}`
+    );
+
 
     // ======================================
     // GENERATE EACH REAL SCENE
@@ -183,6 +187,22 @@ async function processVideoJob(
 
 
       // ====================================
+      // SELECT PROVIDER VIDEO SIZE
+      // ====================================
+
+      let providerSize =
+        "1280x720";
+
+      if (
+        job.aspectRatio ===
+        "9:16"
+      ) {
+        providerSize =
+          "720x1280";
+      }
+
+
+      // ====================================
       // SEND SCENE TO REAL PROVIDER
       // ====================================
 
@@ -195,10 +215,7 @@ async function processVideoJob(
             scene.duration,
 
           size:
-            job.aspectRatio ===
-            "9:16"
-              ? "720x1280"
-              : "1280x720"
+            providerSize
         });
 
       if (
@@ -338,7 +355,8 @@ async function processVideoJob(
     await assembleVideos(
       sceneVideos,
       outputPath,
-      job.totalDuration
+      job.totalDuration,
+      job.aspectRatio
     );
 
 
