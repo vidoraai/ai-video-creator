@@ -168,6 +168,15 @@ button.addEventListener(
 
 
         else if (
+          job.status === "uploading"
+        ) {
+
+          status.textContent =
+            "Uploading your finished video securely...";
+        }
+
+
+        else if (
           job.status === "completed"
         ) {
 
