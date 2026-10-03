@@ -39,6 +39,38 @@ function runFFmpeg(args) {
 
 
 // ==========================================
+// GET VIDEO DIMENSIONS
+// ==========================================
+
+function getVideoDimensions(
+  aspectRatio
+) {
+  switch (
+    aspectRatio
+  ) {
+    case "9:16":
+      return {
+        width: 720,
+        height: 1280
+      };
+
+    case "1:1":
+      return {
+        width: 720,
+        height: 720
+      };
+
+    case "16:9":
+    default:
+      return {
+        width: 1280,
+        height: 720
+      };
+  }
+}
+
+
+// ==========================================
 // DOWNLOAD SCENE
 // ==========================================
 
@@ -65,8 +97,13 @@ async function downloadScene(
 async function prepareScene(
   inputPath,
   outputPath,
-  duration
+  duration,
+  width,
+  height
 ) {
+  const videoFilter =
+    `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,format=yuv420p`;
+
   await runFFmpeg([
     "-y",
 
@@ -79,7 +116,7 @@ async function prepareScene(
     "-an",
 
     "-vf",
-    "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+    videoFilter,
 
     "-r",
     "30",
@@ -108,7 +145,8 @@ async function prepareScene(
 async function assembleVideos(
   sceneVideos,
   outputPath,
-  targetDuration
+  targetDuration,
+  aspectRatio = "16:9"
 ) {
   if (
     !Array.isArray(
@@ -136,6 +174,24 @@ async function assembleVideos(
       "A valid target video duration is required."
     );
   }
+
+
+  const {
+    width,
+    height
+  } =
+    getVideoDimensions(
+      aspectRatio
+    );
+
+
+  console.log(
+    `Assembly aspect ratio: ${aspectRatio}`
+  );
+
+  console.log(
+    `Assembly resolution: ${width}x${height}`
+  );
 
 
   const tempDir =
@@ -216,7 +272,9 @@ async function assembleVideos(
       await prepareScene(
         originalPath,
         preparedPath,
-        duration
+        duration,
+        width,
+        height
       );
 
 
@@ -302,6 +360,10 @@ async function assembleVideos(
     );
 
 
+    const finalVideoFilter =
+      `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,format=yuv420p`;
+
+
     await runFFmpeg([
       "-y",
 
@@ -316,7 +378,7 @@ async function assembleVideos(
       "-an",
 
       "-vf",
-      "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+      finalVideoFilter,
 
       "-r",
       "30",
