@@ -31,7 +31,8 @@ async function createJob(data) {
     ]
   );
 
-  const project = projectResult.rows[0];
+  const project =
+    projectResult.rows[0];
 
 
   // Create the video job
@@ -56,13 +57,17 @@ async function createJob(data) {
     ]
   );
 
-  const job = jobResult.rows[0];
+  const job =
+    jobResult.rows[0];
 
 
   // Save all scenes
-  const scenes = data.scenes || [];
+  const scenes =
+    data.scenes || [];
 
-  for (const scene of scenes) {
+  for (
+    const scene of scenes
+  ) {
 
     await pool.query(
       `
@@ -88,17 +93,23 @@ async function createJob(data) {
 
 
   return {
-    id: String(job.id),
+    id:
+      String(job.id),
 
-    projectId: String(project.id),
+    projectId:
+      String(project.id),
 
-    title: project.title,
+    title:
+      project.title,
 
-    prompt: project.prompt,
+    prompt:
+      project.prompt,
 
-    status: job.status,
+    status:
+      job.status,
 
-    totalDuration: project.duration,
+    totalDuration:
+      project.duration,
 
     sceneDuration:
       data.sceneDuration || 4,
@@ -121,11 +132,13 @@ async function createJob(data) {
     provider:
       data.provider ||
       process.env.VIDORA_VIDEO_PROVIDER ||
-      "openai",
+      "runway",
 
-    scenes: scenes,
+    scenes:
+      scenes,
 
-    sceneVideos: [],
+    sceneVideos:
+      [],
 
     finalVideoPath:
       job.final_video_path,
@@ -146,61 +159,70 @@ async function createJob(data) {
 // GET VIDEO JOB
 // ==========================================
 
-async function getJob(jobId) {
+async function getJob(
+  jobId
+) {
 
-  const jobResult = await pool.query(
-    `
-    SELECT
-      j.*,
-      p.title,
-      p.prompt,
-      p.duration,
-      p.aspect_ratio,
-      p.style
-    FROM video_jobs j
-    JOIN video_projects p
-      ON p.id = j.project_id
-    WHERE j.id = $1
-    `,
-    [jobId]
-  );
+  const jobResult =
+    await pool.query(
+      `
+      SELECT
+        j.*,
+        p.title,
+        p.prompt,
+        p.duration,
+        p.aspect_ratio,
+        p.style
+      FROM video_jobs j
+      JOIN video_projects p
+        ON p.id = j.project_id
+      WHERE j.id = $1
+      `,
+      [jobId]
+    );
 
 
-  if (jobResult.rows.length === 0) {
+  if (
+    jobResult.rows.length === 0
+  ) {
     return null;
   }
 
 
-  const row = jobResult.rows[0];
+  const row =
+    jobResult.rows[0];
 
 
   // Get all scenes
-  const sceneResult = await pool.query(
-    `
-    SELECT
-      id,
-      scene_number,
-      prompt,
-      duration,
-      status,
-      video_id,
-      video_path,
-      created_at
-    FROM video_scenes
-    WHERE job_id = $1
-    ORDER BY scene_number ASC
-    `,
-    [jobId]
-  );
+  const sceneResult =
+    await pool.query(
+      `
+      SELECT
+        id,
+        scene_number,
+        prompt,
+        duration,
+        status,
+        video_id,
+        video_path,
+        created_at
+      FROM video_scenes
+      WHERE job_id = $1
+      ORDER BY scene_number ASC
+      `,
+      [jobId]
+    );
 
 
-  const scenes = sceneResult.rows;
+  const scenes =
+    sceneResult.rows;
 
 
   const sceneVideos =
     scenes
       .filter(
-        (scene) => scene.video_id
+        (scene) =>
+          scene.video_id
       )
       .map(
         (scene) => ({
@@ -258,6 +280,9 @@ async function getJob(jobId) {
 
     style:
       row.style,
+
+    provider:
+      "runway",
 
     finalVideoPath:
       row.final_video_path,
@@ -346,44 +371,59 @@ async function updateJob(
     of Object.entries(updates)
   ) {
 
-    if (allowedFields[key]) {
+    if (
+      allowedFields[key]
+    ) {
 
       fields.push(
         `${allowedFields[key]} = $${values.length + 1}`
       );
 
-      values.push(value);
+      values.push(
+        value
+      );
     }
   }
 
 
-  if (fields.length === 0) {
-    return getJob(jobId);
+  if (
+    fields.length === 0
+  ) {
+    return getJob(
+      jobId
+    );
   }
 
 
-  values.push(jobId);
-
-
-  const result = await pool.query(
-    `
-    UPDATE video_jobs
-    SET
-      ${fields.join(", ")},
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = $${values.length}
-    RETURNING *
-    `,
-    values
+  values.push(
+    jobId
   );
 
 
-  if (result.rows.length === 0) {
+  const result =
+    await pool.query(
+      `
+      UPDATE video_jobs
+      SET
+        ${fields.join(", ")},
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $${values.length}
+      RETURNING *
+      `,
+      values
+    );
+
+
+  if (
+    result.rows.length === 0
+  ) {
     return null;
   }
 
 
-  return getJob(jobId);
+  return getJob(
+    jobId
+  );
 }
 
 
@@ -419,40 +459,54 @@ async function updateScene(
     of Object.entries(updates)
   ) {
 
-    if (allowedFields[key]) {
+    if (
+      allowedFields[key]
+    ) {
 
       fields.push(
         `${allowedFields[key]} = $${values.length + 1}`
       );
 
-      values.push(value);
+      values.push(
+        value
+      );
     }
   }
 
 
-  if (fields.length === 0) {
+  if (
+    fields.length === 0
+  ) {
     return null;
   }
 
 
-  values.push(jobId);
-  values.push(sceneNumber);
+  values.push(
+    jobId
+  );
 
-
-  const result = await pool.query(
-    `
-    UPDATE video_scenes
-    SET
-      ${fields.join(", ")}
-    WHERE job_id = $${values.length - 1}
-      AND scene_number = $${values.length}
-    RETURNING *
-    `,
-    values
+  values.push(
+    sceneNumber
   );
 
 
-  if (result.rows.length === 0) {
+  const result =
+    await pool.query(
+      `
+      UPDATE video_scenes
+      SET
+        ${fields.join(", ")}
+      WHERE job_id = $${values.length - 1}
+        AND scene_number = $${values.length}
+      RETURNING *
+      `,
+      values
+    );
+
+
+  if (
+    result.rows.length === 0
+  ) {
     return null;
   }
 
