@@ -6,7 +6,6 @@ const { pool } = require("./database");
 // ==========================================
 
 async function addVideoToHistory(video) {
-
   const result = await pool.query(
     `
     INSERT INTO video_history (
@@ -21,15 +20,20 @@ async function addVideoToHistory(video) {
     `,
     [
       video.projectId || null,
+
       video.id || null,
+
       video.title ||
         video.prompt ||
         "Untitled Video",
-      video.finalVideoPath || null,
-      video.status || "queued"
+
+      video.finalVideoPath ||
+        null,
+
+      video.status ||
+        "queued"
     ]
   );
-
 
   return result.rows[0];
 }
@@ -40,11 +44,9 @@ async function addVideoToHistory(video) {
 // ==========================================
 
 async function updateVideoHistory(video) {
-
   if (!video.id) {
     return null;
   }
-
 
   const result = await pool.query(
     `
@@ -71,11 +73,13 @@ async function updateVideoHistory(video) {
     ]
   );
 
-
-  if (result.rows.length === 0) {
-    return addVideoToHistory(video);
+  if (
+    result.rows.length === 0
+  ) {
+    return addVideoToHistory(
+      video
+    );
   }
-
 
   return result.rows[0];
 }
@@ -86,7 +90,6 @@ async function updateVideoHistory(video) {
 // ==========================================
 
 async function getVideoHistory() {
-
   const result = await pool.query(
     `
     SELECT
@@ -112,10 +115,8 @@ async function getVideoHistory() {
     `
   );
 
-
   return result.rows.map(
     (row) => ({
-
       id:
         String(row.job_id),
 
@@ -131,7 +132,8 @@ async function getVideoHistory() {
         row.title,
 
       prompt:
-        row.prompt || row.title,
+        row.prompt ||
+        row.title,
 
       duration:
         row.duration,
@@ -150,7 +152,6 @@ async function getVideoHistory() {
 
       createdAt:
         row.created_at
-
     })
   );
 }
@@ -163,7 +164,6 @@ async function getVideoHistory() {
 async function getHistoryItem(
   jobId
 ) {
-
   const result = await pool.query(
     `
     SELECT
@@ -190,18 +190,16 @@ async function getHistoryItem(
     [jobId]
   );
 
-
-  if (result.rows.length === 0) {
+  if (
+    result.rows.length === 0
+  ) {
     return null;
   }
-
 
   const row =
     result.rows[0];
 
-
   return {
-
     id:
       String(row.job_id),
 
@@ -217,7 +215,8 @@ async function getHistoryItem(
       row.title,
 
     prompt:
-      row.prompt || row.title,
+      row.prompt ||
+      row.title,
 
     duration:
       row.duration,
@@ -236,7 +235,6 @@ async function getHistoryItem(
 
     createdAt:
       row.created_at
-
   };
 }
 
@@ -246,13 +244,8 @@ async function getHistoryItem(
 // ==========================================
 
 module.exports = {
-
   addVideoToHistory,
-
   updateVideoHistory,
-
   getVideoHistory,
-
   getHistoryItem
-
 };
