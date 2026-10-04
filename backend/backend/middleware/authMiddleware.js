@@ -1,130 +1,46 @@
-const {
-  verifyAuthToken,
-  findUserById
-} = require("../services/authService");
+const { verifyToken } = require("../services/authService");
 
-
-// ==========================================
-// REQUIRE AUTHENTICATION
-// ==========================================
-
-async function requireAuth(
-  req,
-  res,
-  next
-) {
+function authMiddleware(req, res, next) {
   try {
+    const authorization = req.headers.authorization || "";
 
-    const authorization =
-      req.headers.authorization || "";
-
-
-    if (
-      !authorization.startsWith(
-        "Bearer "
-      )
-    ) {
+    if (!authorization.startsWith("Bearer ")) {
       return res.status(401).json({
-        success:
-          false,
-
-        message:
-          "Authentication is required."
+        success: false,
+        message: "Authentication required."
       });
     }
 
+    const token = authorization.slice(7).trim();
 
-    const token =
-      authorization
-        .slice(7)
-        .trim();
-
-
-    if (
-      !token
-    ) {
+    if (!token) {
       return res.status(401).json({
-        success:
-          false,
-
-        message:
-          "Authentication token is required."
+        success: false,
+        message: "Authentication token is missing."
       });
     }
 
+    const user = verifyToken(token);
 
-    const decoded =
-      verifyAuthToken(
-        token
-      );
-
-
-    if (
-      !decoded ||
-      !decoded.userId
-    ) {
+    if (!user || !user.id) {
       return res.status(401).json({
-        success:
-          false,
-
-        message:
-          "Invalid authentication token."
+        success: false,
+        message: "Invalid or expired authentication token."
       });
     }
 
-
-    const user =
-      await findUserById(
-        decoded.userId
-      );
-
-
-    if (
-      !user
-    ) {
-      return res.status(401).json({
-        success:
-          false,
-
-        message:
-          "User account could not be found."
-      });
-    }
-
-
-    // ======================================
-    // ATTACH USER TO REQUEST
-    // ======================================
-
-    req.user =
-      user;
-
-
+    req.user = user;
     next();
-
   } catch (error) {
-
-    console.error(
-      "Authentication error:",
-      error.message
-    );
-
+    console.error("Authentication error:", error);
 
     return res.status(401).json({
-      success:
-        false,
-
-      message:
-        "Invalid or expired authentication token."
+      success: false,
+      message: "Invalid or expired authentication token."
     });
   }
 }
 
-
-// ==========================================
-// EXPORT
-// ==========================================
-
 module.exports = {
-  requireAuth
+  authMiddleware
 };
