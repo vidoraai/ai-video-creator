@@ -12,12 +12,11 @@ const requireAuth =
 const router =
   express.Router();
 
-/*
-  POST /api/payments/initialize
 
-  Creates a Paystack payment session.
-  No video generation happens here.
-*/
+// ==========================================
+// INITIALIZE PAYMENT
+// ==========================================
+
 router.post(
   "/initialize",
   requireAuth,
@@ -77,16 +76,21 @@ router.post(
           payment.authorizationUrl,
 
         accessCode:
-          payment.accessCode
+          payment.accessCode,
+
+        jobId:
+          jobId || null
       });
+
     } catch (error) {
       console.error(
         "Payment initialization error:",
         error
       );
 
-      return res.status(500).json({
+      return res.status(400).json({
         success: false,
+
         message:
           error.message ||
           "Unable to initialize payment."
@@ -95,11 +99,11 @@ router.post(
   }
 );
 
-/*
-  GET /api/payments/verify/:reference
 
-  Verifies a Paystack transaction.
-*/
+// ==========================================
+// VERIFY PAYMENT
+// ==========================================
+
 router.get(
   "/verify/:reference",
   requireAuth,
@@ -107,13 +111,16 @@ router.get(
     try {
       const result =
         await verifyPayment(
-          req.params.reference
+          req.params.reference,
+          null,
+          req.user.id
         );
 
       return res.json({
         success: true,
         ...result
       });
+
     } catch (error) {
       console.error(
         "Payment verification error:",
@@ -122,12 +129,19 @@ router.get(
 
       return res.status(400).json({
         success: false,
+
         message:
           error.message ||
-          "Unable to verify payment."
+          "Unable to verify Paystack payment."
       });
     }
   }
 );
 
-module.exports = router;
+
+// ==========================================
+// EXPORT
+// ==========================================
+
+module.exports =
+  router;
