@@ -28,6 +28,11 @@ const {
   videoExists
 } = require("../services/videoStorage");
 
+const {
+  initializePayment,
+  getVideoPrice
+} = require("../services/paymentService");
+
 
 // ==========================================
 // VIDEO GENERATION SETTINGS
@@ -139,7 +144,7 @@ function ownsJob(
 
 
 // ==========================================
-// CREATE VIDEO
+// CREATE VIDEO JOB + PAYMENT
 // ==========================================
 
 router.post(
@@ -154,6 +159,10 @@ router.post(
         style
       } = req.body;
 
+      // --------------------------------------
+      // Validate prompt
+      // --------------------------------------
+
       if (
         !prompt ||
         !prompt.trim()
@@ -164,6 +173,11 @@ router.post(
             "Video prompt is required."
         });
       }
+
+
+      // --------------------------------------
+      // Validate duration
+      // --------------------------------------
 
       const requestedDuration =
         Number(duration);
@@ -184,10 +198,36 @@ router.post(
         });
       }
 
+
       const totalDuration =
         Math.floor(
           requestedDuration
         );
+
+
+      // --------------------------------------
+      // Validate that duration has a price
+      // --------------------------------------
+
+      let price;
+
+      try {
+        price =
+          getVideoPrice(
+            totalDuration
+          );
+      } catch (priceError) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "This video duration is not available for purchase. Choose 30 seconds, 1 minute, 5 minutes, 10 minutes, 30 minutes, or 1 hour."
+        });
+      }
+
+
+      // --------------------------------------
+      // Create scene plan
+      // --------------------------------------
 
       const scenes =
         createScenePlan(
@@ -198,6 +238,7 @@ router.post(
       const sceneCount =
         scenes.length;
 
+
       console.log(
         `Creating ${sceneCount} scenes for ${totalDuration}-second video`
       );
@@ -205,6 +246,15 @@ router.post(
       console.log(
         `Authenticated user: ${req.user.id}`
       );
+
+      console.log(
+        `Video price: ${price} kobo`
+      );
+
+
+      // --------------------------------------
+      // Create database job
+      // --------------------------------------
 
       const job =
         await createJob({
@@ -235,32 +285,95 @@ router.post(
           scenes
         });
 
+
+      // --------------------------------------
+      // Add job to history
+      // --------------------------------------
+
       await addVideoToHistory(
         job
       );
 
-      processVideoJob(
-        job.id
-      ).catch(
-        (error) => {
-          console.error(
-            "Background video job error:",
-            error
-          );
-        }
+
+      // --------------------------------------
+      // Initialize payment
+      // --------------------------------------
+
+      let payment;
+
+      try {
+        payment =
+          await initializePayment({
+            email:
+              req.user.email,
+
+            duration:
+              totalDuration,
+
+            userId:
+              req.user.id,
+
+            jobId:
+              job.id
+          });
+
+      } catch (paymentError) {
+        console.error(
+          "Payment initialization error:",
+          paymentError
+        );
+
+        return res.status(400).json({
+          success: false,
+
+          message:
+            paymentError.message ||
+            "Unable to initialize payment.",
+
+          jobId:
+            job.id
+        });
+      }
+
+
+      // --------------------------------------
+      // DO NOT START VIDEO GENERATION HERE
+      //
+      // The worker will start only after
+      // successful payment verification.
+      // --------------------------------------
+
+      console.log(
+        `Payment required before generation for job ${job.id}`
       );
+
 
       return res.status(202).json({
         success: true,
 
         message:
-          "Video request received.",
+          "Video job created. Payment is required before video generation begins.",
 
         status:
-          "queued",
+          "awaiting_payment",
 
         jobId:
           job.id,
+
+        amount:
+          payment.amount,
+
+        currency:
+          "NGN",
+
+        paymentReference:
+          payment.reference,
+
+        authorizationUrl:
+          payment.authorizationUrl,
+
+        accessCode:
+          payment.accessCode,
 
         job
       });
@@ -273,6 +386,7 @@ router.post(
 
       return res.status(500).json({
         success: false,
+
         message:
           error.message ||
           "Unable to create video job."
@@ -368,6 +482,7 @@ router.get(
 
       return res.status(500).json({
         success: false,
+
         message:
           error.message ||
           "Unable to get video job."
@@ -404,6 +519,7 @@ router.get(
 
       return res.status(500).json({
         success: false,
+
         message:
           error.message ||
           "Unable to load video history."
@@ -438,6 +554,7 @@ router.get(
 
       return res.json({
         success: true,
+
         history:
           historyItem
       });
@@ -450,6 +567,7 @@ router.get(
 
       return res.status(500).json({
         success: false,
+
         message:
           error.message ||
           "Unable to load history item."
@@ -545,6 +663,7 @@ router.get(
 
       return res.status(500).json({
         success: false,
+
         message:
           error.message ||
           "Unable to play video."
@@ -640,6 +759,7 @@ router.get(
 
       return res.status(500).json({
         success: false,
+
         message:
           error.message ||
           "Unable to download video."
