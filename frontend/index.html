@@ -36,6 +36,223 @@
   <main>
 
     <!-- ==============================
+         ACCOUNT
+    =============================== -->
+
+    <section
+      id="accountSection"
+      class="account-section"
+    >
+
+      <h2>
+        Your Account
+      </h2>
+
+
+      <!-- ==============================
+           LOGGED OUT
+      =============================== -->
+
+      <div id="loggedOut">
+
+        <p>
+          Create an account or log in to
+          start creating AI videos.
+        </p>
+
+
+        <div class="account-actions">
+
+          <button
+            id="showRegister"
+            type="button"
+          >
+            Create Account
+          </button>
+
+
+          <button
+            id="showLogin"
+            type="button"
+          >
+            Login
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <!-- ==============================
+           REGISTER
+      =============================== -->
+
+      <form
+        id="registerForm"
+        style="display: none;"
+      >
+
+        <h3>
+          Create Your Account
+        </h3>
+
+
+        <label for="registerName">
+          Name
+        </label>
+
+        <input
+          id="registerName"
+          type="text"
+          placeholder="Your name"
+          maxlength="255"
+          required
+        >
+
+
+        <label for="registerEmail">
+          Email
+        </label>
+
+        <input
+          id="registerEmail"
+          type="email"
+          placeholder="Your email"
+          required
+        >
+
+
+        <label for="registerPassword">
+          Password
+        </label>
+
+        <input
+          id="registerPassword"
+          type="password"
+          placeholder="Create a password"
+          minlength="8"
+          required
+        >
+
+
+        <button
+          id="registerButton"
+          type="submit"
+        >
+          Create Account
+        </button>
+
+
+        <button
+          id="cancelRegister"
+          type="button"
+        >
+          Back to Login
+        </button>
+
+      </form>
+
+
+      <!-- ==============================
+           LOGIN
+      =============================== -->
+
+      <form
+        id="loginForm"
+        style="display: none;"
+      >
+
+        <h3>
+          Login to Vidora AI
+        </h3>
+
+
+        <label for="loginEmail">
+          Email
+        </label>
+
+        <input
+          id="loginEmail"
+          type="email"
+          placeholder="Your email"
+          required
+        >
+
+
+        <label for="loginPassword">
+          Password
+        </label>
+
+        <input
+          id="loginPassword"
+          type="password"
+          placeholder="Your password"
+          required
+        >
+
+
+        <button
+          id="loginButton"
+          type="submit"
+        >
+          Login
+        </button>
+
+
+        <button
+          id="cancelLogin"
+          type="button"
+        >
+          Back
+        </button>
+
+      </form>
+
+
+      <!-- ==============================
+           LOGGED IN
+      =============================== -->
+
+      <div
+        id="loggedIn"
+        style="display: none;"
+      >
+
+        <p>
+          Welcome,
+          <strong id="accountName">
+            User
+          </strong>
+        </p>
+
+
+        <p>
+          <span id="accountEmail">
+            user@example.com
+          </span>
+        </p>
+
+
+        <button
+          id="logoutButton"
+          type="button"
+        >
+          Logout
+        </button>
+
+      </div>
+
+
+      <!-- ==============================
+           ACCOUNT STATUS
+      =============================== -->
+
+      <p id="accountStatus"></p>
+
+    </section>
+
+
+    <!-- ==============================
          CREATE VIDEO
     =============================== -->
 
@@ -164,7 +381,10 @@
            CREATE BUTTON
       =============================== -->
 
-      <button id="createVideo">
+      <button
+        id="createVideo"
+        type="button"
+      >
         Create Video
       </button>
 
