@@ -24,6 +24,620 @@ const videoContainer =
 
 
 // ==========================================
+// ACCOUNT ELEMENTS
+// ==========================================
+
+const loggedOut =
+  document.getElementById("loggedOut");
+
+const loggedIn =
+  document.getElementById("loggedIn");
+
+const registerForm =
+  document.getElementById("registerForm");
+
+const loginForm =
+  document.getElementById("loginForm");
+
+const showRegister =
+  document.getElementById("showRegister");
+
+const showLogin =
+  document.getElementById("showLogin");
+
+const cancelRegister =
+  document.getElementById("cancelRegister");
+
+const cancelLogin =
+  document.getElementById("cancelLogin");
+
+const logoutButton =
+  document.getElementById("logoutButton");
+
+const registerName =
+  document.getElementById("registerName");
+
+const registerEmail =
+  document.getElementById("registerEmail");
+
+const registerPassword =
+  document.getElementById("registerPassword");
+
+const loginEmail =
+  document.getElementById("loginEmail");
+
+const loginPassword =
+  document.getElementById("loginPassword");
+
+const accountName =
+  document.getElementById("accountName");
+
+const accountEmail =
+  document.getElementById("accountEmail");
+
+const accountStatus =
+  document.getElementById("accountStatus");
+
+
+// ==========================================
+// AUTHENTICATION STORAGE
+// ==========================================
+
+const TOKEN_KEY =
+  "vidora_auth_token";
+
+const USER_KEY =
+  "vidora_user";
+
+
+function getToken() {
+
+  return localStorage.getItem(
+    TOKEN_KEY
+  );
+}
+
+
+function getStoredUser() {
+
+  const user =
+    localStorage.getItem(
+      USER_KEY
+    );
+
+  if (!user) {
+    return null;
+  }
+
+  try {
+
+    return JSON.parse(
+      user
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Unable to read stored user:",
+      error
+    );
+
+    return null;
+  }
+}
+
+
+function saveAuthentication(
+  token,
+  user
+) {
+
+  localStorage.setItem(
+    TOKEN_KEY,
+    token
+  );
+
+  localStorage.setItem(
+    USER_KEY,
+    JSON.stringify(user)
+  );
+}
+
+
+function clearAuthentication() {
+
+  localStorage.removeItem(
+    TOKEN_KEY
+  );
+
+  localStorage.removeItem(
+    USER_KEY
+  );
+}
+
+
+// ==========================================
+// AUTHENTICATED REQUEST HEADERS
+// ==========================================
+
+function getAuthHeaders() {
+
+  const token =
+    getToken();
+
+  const headers = {
+    "Content-Type":
+      "application/json"
+  };
+
+  if (token) {
+
+    headers.Authorization =
+      `Bearer ${token}`;
+  }
+
+  return headers;
+}
+
+
+// ==========================================
+// ACCOUNT INTERFACE
+// ==========================================
+
+function updateAccountInterface() {
+
+  const token =
+    getToken();
+
+  const user =
+    getStoredUser();
+
+
+  if (
+    token &&
+    user
+  ) {
+
+    loggedOut.style.display =
+      "none";
+
+    registerForm.style.display =
+      "none";
+
+    loginForm.style.display =
+      "none";
+
+    loggedIn.style.display =
+      "block";
+
+    accountName.textContent =
+      user.name ||
+      "User";
+
+    accountEmail.textContent =
+      user.email ||
+      "";
+
+    button.disabled =
+      false;
+
+    return;
+  }
+
+
+  loggedOut.style.display =
+    "block";
+
+  registerForm.style.display =
+    "none";
+
+  loginForm.style.display =
+    "none";
+
+  loggedIn.style.display =
+    "none";
+
+  button.disabled =
+    true;
+}
+
+
+// ==========================================
+// SHOW REGISTER
+// ==========================================
+
+showRegister.addEventListener(
+  "click",
+  () => {
+
+    loggedOut.style.display =
+      "none";
+
+    loginForm.style.display =
+      "none";
+
+    registerForm.style.display =
+      "block";
+
+    accountStatus.textContent =
+      "";
+  }
+);
+
+
+// ==========================================
+// SHOW LOGIN
+// ==========================================
+
+showLogin.addEventListener(
+  "click",
+  () => {
+
+    loggedOut.style.display =
+      "none";
+
+    registerForm.style.display =
+      "none";
+
+    loginForm.style.display =
+      "block";
+
+    accountStatus.textContent =
+      "";
+  }
+);
+
+
+// ==========================================
+// CANCEL REGISTER
+// ==========================================
+
+cancelRegister.addEventListener(
+  "click",
+  () => {
+
+    registerForm.style.display =
+      "none";
+
+    loggedOut.style.display =
+      "block";
+
+    accountStatus.textContent =
+      "";
+  }
+);
+
+
+// ==========================================
+// CANCEL LOGIN
+// ==========================================
+
+cancelLogin.addEventListener(
+  "click",
+  () => {
+
+    loginForm.style.display =
+      "none";
+
+    loggedOut.style.display =
+      "block";
+
+    accountStatus.textContent =
+      "";
+  }
+);
+
+
+// ==========================================
+// CREATE ACCOUNT
+// ==========================================
+
+registerForm.addEventListener(
+  "submit",
+  async (event) => {
+
+    event.preventDefault();
+
+    const name =
+      registerName.value.trim();
+
+    const email =
+      registerEmail.value.trim();
+
+    const password =
+      registerPassword.value;
+
+
+    if (!name) {
+
+      accountStatus.textContent =
+        "Please enter your name.";
+
+      return;
+    }
+
+
+    if (!email) {
+
+      accountStatus.textContent =
+        "Please enter your email.";
+
+      return;
+    }
+
+
+    if (
+      password.length < 8
+    ) {
+
+      accountStatus.textContent =
+        "Password must be at least 8 characters.";
+
+      return;
+    }
+
+
+    const registerButton =
+      document.getElementById(
+        "registerButton"
+      );
+
+    registerButton.disabled =
+      true;
+
+    accountStatus.textContent =
+      "Creating your account...";
+
+
+    try {
+
+      const response =
+        await fetch(
+          `${API_BASE}/api/auth/register`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json"
+            },
+
+            body: JSON.stringify({
+              name,
+              email,
+              password
+            })
+          }
+        );
+
+
+      const data =
+        await response.json();
+
+
+      if (!response.ok) {
+
+        throw new Error(
+          data.message ||
+          "Unable to create account."
+        );
+      }
+
+
+      if (
+        !data.token ||
+        !data.user
+      ) {
+
+        throw new Error(
+          "The server did not return account authentication information."
+        );
+      }
+
+
+      saveAuthentication(
+        data.token,
+        data.user
+      );
+
+
+      registerForm.reset();
+
+      accountStatus.textContent =
+        "Account created successfully.";
+
+      updateAccountInterface();
+
+      loadVideoHistory();
+
+
+    } catch (error) {
+
+      console.error(
+        "Registration error:",
+        error
+      );
+
+      accountStatus.textContent =
+        error.message;
+
+
+    } finally {
+
+      registerButton.disabled =
+        false;
+    }
+  }
+);
+
+
+// ==========================================
+// LOGIN
+// ==========================================
+
+loginForm.addEventListener(
+  "submit",
+  async (event) => {
+
+    event.preventDefault();
+
+    const email =
+      loginEmail.value.trim();
+
+    const password =
+      loginPassword.value;
+
+
+    if (!email) {
+
+      accountStatus.textContent =
+        "Please enter your email.";
+
+      return;
+    }
+
+
+    if (!password) {
+
+      accountStatus.textContent =
+        "Please enter your password.";
+
+      return;
+    }
+
+
+    const loginButton =
+      document.getElementById(
+        "loginButton"
+      );
+
+    loginButton.disabled =
+      true;
+
+    accountStatus.textContent =
+      "Logging in...";
+
+
+    try {
+
+      const response =
+        await fetch(
+          `${API_BASE}/api/auth/login`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json"
+            },
+
+            body: JSON.stringify({
+              email,
+              password
+            })
+          }
+        );
+
+
+      const data =
+        await response.json();
+
+
+      if (!response.ok) {
+
+        throw new Error(
+          data.message ||
+          "Unable to log in."
+        );
+      }
+
+
+      if (
+        !data.token ||
+        !data.user
+      ) {
+
+        throw new Error(
+          "The server did not return account authentication information."
+        );
+      }
+
+
+      saveAuthentication(
+        data.token,
+        data.user
+      );
+
+
+      loginForm.reset();
+
+      accountStatus.textContent =
+        "Login successful.";
+
+      updateAccountInterface();
+
+      loadVideoHistory();
+
+
+    } catch (error) {
+
+      console.error(
+        "Login error:",
+        error
+      );
+
+      accountStatus.textContent =
+        error.message;
+
+
+    } finally {
+
+      loginButton.disabled =
+        false;
+    }
+  }
+);
+
+
+// ==========================================
+// LOGOUT
+// ==========================================
+
+logoutButton.addEventListener(
+  "click",
+  () => {
+
+    clearAuthentication();
+
+    accountStatus.textContent =
+      "You have been logged out.";
+
+    status.textContent =
+      "";
+
+    videoContainer.innerHTML = `
+      <div class="video-result-header">
+
+        <h3>
+          🎬 Your Generated Video
+        </h3>
+
+        <p>
+          Your video will appear here
+          when generation is complete.
+        </p>
+
+      </div>
+    `;
+
+    updateAccountInterface();
+
+    displayVideoHistory([]);
+  }
+);
+
+
+// ==========================================
 // CREATE VIDEO
 // ==========================================
 
@@ -31,8 +645,22 @@ button.addEventListener(
   "click",
   async () => {
 
+    const token =
+      getToken();
+
+
+    if (!token) {
+
+      status.textContent =
+        "Please create an account or log in before creating a video.";
+
+      return;
+    }
+
+
     const videoPrompt =
       prompt.value.trim();
+
 
     if (!videoPrompt) {
 
@@ -42,12 +670,16 @@ button.addEventListener(
       return;
     }
 
-    button.disabled = true;
 
-    videoContainer.innerHTML = "";
+    button.disabled =
+      true;
+
+    videoContainer.innerHTML =
+      "";
 
     status.textContent =
       "Creating your video job...";
+
 
     try {
 
@@ -57,10 +689,8 @@ button.addEventListener(
           {
             method: "POST",
 
-            headers: {
-              "Content-Type":
-                "application/json"
-            },
+            headers:
+              getAuthHeaders(),
 
             body: JSON.stringify({
               prompt:
@@ -78,8 +708,24 @@ button.addEventListener(
           }
         );
 
+
       const data =
         await response.json();
+
+
+      if (
+        response.status === 401
+      ) {
+
+        clearAuthentication();
+
+        updateAccountInterface();
+
+        throw new Error(
+          "Your login session has expired. Please log in again."
+        );
+      }
+
 
       if (!response.ok) {
 
@@ -89,8 +735,10 @@ button.addEventListener(
         );
       }
 
+
       const jobId =
         data.jobId;
+
 
       if (!jobId) {
 
@@ -99,10 +747,14 @@ button.addEventListener(
         );
       }
 
+
       status.textContent =
         "Video job created. Preparing your video...";
 
-      let finished = false;
+
+      let finished =
+        false;
+
 
       while (!finished) {
 
@@ -114,13 +766,34 @@ button.addEventListener(
             )
         );
 
+
         const jobResponse =
           await fetch(
-            `${API_BASE}/api/videos/job/${jobId}`
+            `${API_BASE}/api/videos/job/${jobId}`,
+            {
+              headers:
+                getAuthHeaders()
+            }
           );
+
 
         const jobData =
           await jobResponse.json();
+
+
+        if (
+          jobResponse.status === 401
+        ) {
+
+          clearAuthentication();
+
+          updateAccountInterface();
+
+          throw new Error(
+            "Your login session has expired. Please log in again."
+          );
+        }
+
 
         if (!jobResponse.ok) {
 
@@ -129,6 +802,7 @@ button.addEventListener(
             "Unable to check video job."
           );
         }
+
 
         const job =
           jobData.job;
@@ -180,16 +854,19 @@ button.addEventListener(
           job.status === "completed"
         ) {
 
-          finished = true;
+          finished =
+            true;
 
           status.textContent =
             "Your video is ready!";
+
 
           displayFinishedVideo(
             jobId,
             jobData.videoUrl,
             jobData.downloadUrl
           );
+
 
           loadVideoHistory();
         }
@@ -199,7 +876,8 @@ button.addEventListener(
           job.status === "failed"
         ) {
 
-          finished = true;
+          finished =
+            true;
 
           status.textContent =
             "Video generation failed: " +
@@ -214,12 +892,14 @@ button.addEventListener(
           job.status === "cancelled"
         ) {
 
-          finished = true;
+          finished =
+            true;
 
           status.textContent =
             "Video generation was cancelled.";
         }
       }
+
 
     } catch (error) {
 
@@ -232,9 +912,11 @@ button.addEventListener(
         "Unable to create video: " +
         error.message;
 
+
     } finally {
 
-      button.disabled = false;
+      button.disabled =
+        false;
     }
   }
 );
@@ -255,10 +937,12 @@ function displayFinishedVideo(
       ? `${API_BASE}${videoUrl}`
       : `${API_BASE}/api/videos/job/${jobId}/video`;
 
+
   const fullDownloadUrl =
     downloadUrl
       ? `${API_BASE}${downloadUrl}`
       : `${API_BASE}/api/videos/job/${jobId}/download`;
+
 
   videoContainer.innerHTML = `
 
@@ -285,6 +969,7 @@ function displayFinishedVideo(
 
       </video>
 
+
       <div class="result-actions">
 
         <a
@@ -309,15 +994,47 @@ function displayFinishedVideo(
 
 async function loadVideoHistory() {
 
+  const token =
+    getToken();
+
+
+  if (!token) {
+
+    displayVideoHistory([]);
+
+    return;
+  }
+
+
   try {
 
     const response =
       await fetch(
-        `${API_BASE}/api/videos/history`
+        `${API_BASE}/api/videos/history`,
+        {
+          headers:
+            getAuthHeaders()
+        }
       );
+
 
     const data =
       await response.json();
+
+
+    if (
+      response.status === 401
+    ) {
+
+      clearAuthentication();
+
+      updateAccountInterface();
+
+      displayVideoHistory([]);
+
+      return;
+    }
+
 
     if (!response.ok) {
 
@@ -327,9 +1044,11 @@ async function loadVideoHistory() {
       );
     }
 
+
     displayVideoHistory(
       data.history || []
     );
+
 
   } catch (error) {
 
@@ -354,21 +1073,31 @@ function displayVideoHistory(
       "videoHistory"
     );
 
+
   if (!existing) {
     return;
   }
 
 
-  if (history.length === 0) {
+  if (
+    history.length === 0
+  ) {
 
     existing.innerHTML = `
+
       <div class="history-empty">
-        <h3>No videos yet</h3>
+
+        <h3>
+          Your Video History
+        </h3>
+
         <p>
           Your generated videos will
           appear here.
         </p>
+
       </div>
+
     `;
 
     return;
@@ -384,10 +1113,12 @@ function displayVideoHistory(
       </h2>
 
       <span>
-        ${history.length} video${history.length === 1 ? "" : "s"}
+        ${history.length}
+        video${history.length === 1 ? "" : "s"}
       </span>
 
     </div>
+
 
     <div class="history-list">
 
@@ -399,10 +1130,12 @@ function displayVideoHistory(
               video.createdAt
             ).toLocaleString();
 
+
           const videoUrl =
             video.status === "completed"
               ? `${API_BASE}/api/videos/job/${video.id}/video`
               : null;
+
 
           const downloadUrl =
             video.status === "completed"
@@ -422,11 +1155,16 @@ function displayVideoHistory(
                   )}
                 </h3>
 
+
                 <p>
                   ${video.duration || 0}
                   seconds •
-                  ${video.style || "cinematic"}
+                  ${escapeHtml(
+                    video.style ||
+                    "cinematic"
+                  )}
                 </p>
+
 
                 <small>
                   ${date}
@@ -438,7 +1176,9 @@ function displayVideoHistory(
               <div class="history-status">
 
                 <strong>
-                  ${video.status}
+                  ${escapeHtml(
+                    video.status
+                  )}
                 </strong>
 
               </div>
@@ -456,6 +1196,7 @@ function displayVideoHistory(
                       >
                         ▶ Play
                       </button>
+
 
                       <a
                         href="${downloadUrl}"
@@ -477,6 +1218,7 @@ function displayVideoHistory(
       ).join("")}
 
     </div>
+
   `;
 }
 
@@ -496,6 +1238,7 @@ function playHistoryVideo(
       <h2>
         Video from History 🎬
       </h2>
+
 
       <video
         class="result-video"
@@ -517,6 +1260,7 @@ function playHistoryVideo(
     </div>
 
   `;
+
 
   videoContainer.scrollIntoView({
     behavior: "smooth"
@@ -554,6 +1298,13 @@ function escapeHtml(
       "&#039;"
     );
 }
+
+
+// ==========================================
+// INITIAL ACCOUNT STATE
+// ==========================================
+
+updateAccountInterface();
 
 
 // ==========================================
