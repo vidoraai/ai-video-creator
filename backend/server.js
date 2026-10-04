@@ -14,6 +14,8 @@ const videoRoutes =
 const authRoutes =
   require("./routes/authRoutes");
 
+const paymentRoutes =
+  require("./routes/paymentRoutes");
 
 const app =
   express();
@@ -75,6 +77,16 @@ app.get(
 app.use(
   "/api/auth",
   authRoutes
+);
+
+
+// ==========================================
+// PAYMENT ROUTES
+// ==========================================
+
+app.use(
+  "/api/payments",
+  paymentRoutes
 );
 
 
