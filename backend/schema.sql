@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+
 CREATE TABLE IF NOT EXISTS video_projects (
   id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -17,6 +18,7 @@ CREATE TABLE IF NOT EXISTS video_projects (
   status VARCHAR(50) DEFAULT 'planning',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
 
 CREATE TABLE IF NOT EXISTS video_jobs (
   id SERIAL PRIMARY KEY,
@@ -32,6 +34,7 @@ CREATE TABLE IF NOT EXISTS video_jobs (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+
 CREATE TABLE IF NOT EXISTS video_scenes (
   id SERIAL PRIMARY KEY,
   job_id INTEGER REFERENCES video_jobs(id) ON DELETE CASCADE,
@@ -44,6 +47,7 @@ CREATE TABLE IF NOT EXISTS video_scenes (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+
 CREATE TABLE IF NOT EXISTS video_history (
   id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -53,4 +57,35 @@ CREATE TABLE IF NOT EXISTS video_history (
   video_path TEXT,
   status VARCHAR(50),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+CREATE TABLE IF NOT EXISTS payments (
+  id SERIAL PRIMARY KEY,
+
+  user_id INTEGER NOT NULL
+    REFERENCES users(id)
+    ON DELETE CASCADE,
+
+  job_id INTEGER
+    REFERENCES video_jobs(id)
+    ON DELETE SET NULL,
+
+  reference VARCHAR(255) UNIQUE NOT NULL,
+
+  amount INTEGER NOT NULL,
+
+  currency VARCHAR(10) DEFAULT 'NGN',
+
+  duration INTEGER NOT NULL,
+
+  status VARCHAR(50) DEFAULT 'initialized',
+
+  authorization_url TEXT,
+
+  paid_at TIMESTAMP,
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
