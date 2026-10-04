@@ -1,5 +1,11 @@
+const {
+  pool
+} = require("./database");
+
+
 const PAYSTACK_API_URL =
   "https://api.paystack.co";
+
 
 const VIDEO_PRICES = {
   30: 1299900,
@@ -9,6 +15,7 @@ const VIDEO_PRICES = {
   1800: 49999900,
   3600: 99999900
 };
+
 
 function getSecretKey() {
   const secretKey =
@@ -23,11 +30,14 @@ function getSecretKey() {
   return secretKey;
 }
 
+
 function getVideoPrice(duration) {
   const seconds =
     Number(duration);
 
-  if (!VIDEO_PRICES[seconds]) {
+  if (
+    !VIDEO_PRICES[seconds]
+  ) {
     throw new Error(
       "Unsupported video duration."
     );
@@ -35,6 +45,7 @@ function getVideoPrice(duration) {
 
   return VIDEO_PRICES[seconds];
 }
+
 
 async function initializePayment({
   email,
@@ -48,14 +59,69 @@ async function initializePayment({
     );
   }
 
+  if (!userId) {
+    throw new Error(
+      "User ID is required."
+    );
+  }
+
   const amount =
     getVideoPrice(duration);
+
+
+  if (jobId) {
+    const jobResult =
+      await pool.query(
+        `
+        SELECT
+          j.id,
+          p.user_id,
+          j.total_duration
+        FROM video_jobs j
+        INNER JOIN video_projects p
+          ON p.id = j.project_id
+        WHERE j.id = $1
+        `,
+        [jobId]
+      );
+
+    if (
+      jobResult.rows.length === 0
+    ) {
+      throw new Error(
+        "Video job not found."
+      );
+    }
+
+    const job =
+      jobResult.rows[0];
+
+    if (
+      String(job.user_id) !==
+      String(userId)
+    ) {
+      throw new Error(
+        "You do not have access to this video job."
+      );
+    }
+
+    if (
+      Number(job.total_duration) !==
+      Number(duration)
+    ) {
+      throw new Error(
+        "Payment duration does not match the video job."
+      );
+    }
+  }
+
 
   const reference =
     `VIDORA-${Date.now()}-${Math.random()
       .toString(36)
       .substring(2, 10)
       .toUpperCase()}`;
+
 
   const response =
     await fetch(
@@ -84,7 +150,8 @@ async function initializePayment({
 
           metadata: {
             userId,
-            jobId,
+            jobId:
+              jobId || null,
             duration,
             product:
               "Vidora AI video generation"
@@ -93,8 +160,10 @@ async function initializePayment({
       }
     );
 
+
   const data =
     await response.json();
+
 
   if (
     !response.ok ||
@@ -106,12 +175,52 @@ async function initializePayment({
     );
   }
 
+
+  const authorizationUrl =
+    data.data.authorization_url;
+
+
+  await pool.query(
+    `
+    INSERT INTO payments (
+      user_id,
+      job_id,
+      reference,
+      amount,
+      currency,
+      duration,
+      status,
+      authorization_url
+    )
+    VALUES (
+      $1,
+      $2,
+      $3,
+      $4,
+      $5,
+      $6,
+      $7,
+      $8
+    )
+    `,
+    [
+      userId,
+      jobId || null,
+      data.data.reference,
+      amount,
+      "NGN",
+      duration,
+      "initialized",
+      authorizationUrl
+    ]
+  );
+
+
   return {
     reference:
       data.data.reference,
 
-    authorizationUrl:
-      data.data.authorization_url,
+    authorizationUrl,
 
     accessCode:
       data.data.access_code,
@@ -120,15 +229,92 @@ async function initializePayment({
   };
 }
 
+
 async function verifyPayment(
   reference,
-  expectedAmount
+  expectedAmount,
+  userId
 ) {
   if (!reference) {
     throw new Error(
       "Payment reference is required."
     );
   }
+
+  if (!userId) {
+    throw new Error(
+      "User ID is required."
+    );
+  }
+
+
+  const paymentResult =
+    await pool.query(
+      `
+      SELECT
+        id,
+        user_id,
+        job_id,
+        amount,
+        currency,
+        duration,
+        status
+      FROM payments
+      WHERE reference = $1
+      `,
+      [reference]
+    );
+
+
+  if (
+    paymentResult.rows.length === 0
+  ) {
+    throw new Error(
+      "Payment record was not found."
+    );
+  }
+
+
+  const payment =
+    paymentResult.rows[0];
+
+
+  if (
+    String(payment.user_id) !==
+    String(userId)
+  ) {
+    throw new Error(
+      "You do not have access to this payment."
+    );
+  }
+
+
+  if (
+    payment.status ===
+    "success"
+  ) {
+    return {
+      paid: true,
+
+      status:
+        "success",
+
+      reference,
+
+      amount:
+        Number(payment.amount),
+
+      currency:
+        payment.currency,
+
+      duration:
+        Number(payment.duration),
+
+      jobId:
+        payment.job_id
+    };
+  }
+
 
   const response =
     await fetch(
@@ -145,8 +331,10 @@ async function verifyPayment(
       }
     );
 
+
   const data =
     await response.json();
+
 
   if (
     !response.ok ||
@@ -158,47 +346,138 @@ async function verifyPayment(
     );
   }
 
+
   const transaction =
     data.data;
 
+
   const expected =
-    Number(expectedAmount);
+    Number(
+      expectedAmount ||
+        payment.amount
+    );
+
 
   const paid =
-    Number(transaction.amount);
+    Number(
+      transaction.amount
+    );
+
 
   if (
     transaction.status !==
     "success"
   ) {
+    await pool.query(
+      `
+      UPDATE payments
+      SET
+        status = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE reference = $2
+      `,
+      [
+        transaction.status ||
+          "failed",
+        reference
+      ]
+    );
+
+
     return {
       paid: false,
 
       status:
         transaction.status,
 
-      reference:
-        transaction.reference
+      reference,
+
+      amount:
+        paid,
+
+      jobId:
+        payment.job_id
     };
   }
 
+
   if (
-    expected &&
     paid !== expected
   ) {
+    await pool.query(
+      `
+      UPDATE payments
+      SET
+        status = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE reference = $2
+      `,
+      [
+        "amount_mismatch",
+        reference
+      ]
+    );
+
+
     throw new Error(
       "Payment amount does not match the required video price."
     );
   }
 
+
+  if (
+    paid !==
+    Number(payment.amount)
+  ) {
+    await pool.query(
+      `
+      UPDATE payments
+      SET
+        status = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE reference = $2
+      `,
+      [
+        "amount_mismatch",
+        reference
+      ]
+    );
+
+
+    throw new Error(
+      "Payment amount does not match the stored payment amount."
+    );
+  }
+
+
+  await pool.query(
+    `
+    UPDATE payments
+    SET
+      status = $1,
+      paid_at = $2,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE reference = $3
+    `,
+    [
+      "success",
+      transaction.paid_at
+        ? new Date(
+            transaction.paid_at
+          )
+        : new Date(),
+      reference
+    ]
+  );
+
+
   return {
     paid: true,
 
     status:
-      transaction.status,
+      "success",
 
-    reference:
-      transaction.reference,
+    reference,
 
     amount:
       paid,
@@ -206,14 +485,21 @@ async function verifyPayment(
     currency:
       transaction.currency,
 
+    duration:
+      Number(payment.duration),
+
     paidAt:
       transaction.paid_at,
 
     customerEmail:
       transaction.customer?.email ||
-      null
+      null,
+
+    jobId:
+      payment.job_id
   };
 }
+
 
 module.exports = {
   VIDEO_PRICES,
