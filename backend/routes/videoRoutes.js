@@ -116,10 +116,31 @@ function createScenePlan(
 
 
 // ==========================================
+// CHECK JOB OWNERSHIP
+// ==========================================
+
+function ownsJob(
+  job,
+  userId
+) {
+  if (
+    !job ||
+    !job.userId ||
+    !userId
+  ) {
+    return false;
+  }
+
+  return (
+    String(job.userId) ===
+    String(userId)
+  );
+}
+
+
+// ==========================================
 // CREATE VIDEO
 // ==========================================
-// Authentication is required before a video
-// generation job can be created.
 
 router.post(
   "/generate",
@@ -187,6 +208,9 @@ router.post(
 
       const job =
         await createJob({
+          userId:
+            req.user.id,
+
           title:
             prompt.trim(),
 
@@ -264,6 +288,7 @@ router.post(
 
 router.get(
   "/job/:id",
+  requireAuth,
   async (req, res) => {
     try {
       const job =
@@ -276,6 +301,19 @@ router.get(
           success: false,
           message:
             "Video job not found."
+        });
+      }
+
+      if (
+        !ownsJob(
+          job,
+          req.user.id
+        )
+      ) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "You do not have access to this video job."
         });
       }
 
@@ -299,11 +337,16 @@ router.get(
             );
 
           if (exists) {
+            const signedUrl =
+              await getVideoUrl(
+                job.id
+              );
+
             response.videoUrl =
-              `/api/videos/job/${job.id}/video`;
+              signedUrl;
 
             response.downloadUrl =
-              `/api/videos/job/${job.id}/download`;
+              signedUrl;
           }
         } catch (storageError) {
           console.error(
@@ -340,10 +383,13 @@ router.get(
 
 router.get(
   "/history",
+  requireAuth,
   async (req, res) => {
     try {
       const history =
-        await getVideoHistory();
+        await getVideoHistory(
+          req.user.id
+        );
 
       return res.json({
         success: true,
@@ -373,11 +419,13 @@ router.get(
 
 router.get(
   "/history/:id",
+  requireAuth,
   async (req, res) => {
     try {
       const historyItem =
         await getHistoryItem(
-          req.params.id
+          req.params.id,
+          req.user.id
         );
 
       if (!historyItem) {
@@ -417,6 +465,7 @@ router.get(
 
 router.get(
   "/job/:id/video",
+  requireAuth,
   async (req, res) => {
     try {
       const job =
@@ -429,6 +478,19 @@ router.get(
           success: false,
           message:
             "Video job not found."
+        });
+      }
+
+      if (
+        !ownsJob(
+          job,
+          req.user.id
+        )
+      ) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "You do not have access to this video."
         });
       }
 
@@ -498,6 +560,7 @@ router.get(
 
 router.get(
   "/job/:id/download",
+  requireAuth,
   async (req, res) => {
     try {
       const job =
@@ -510,6 +573,19 @@ router.get(
           success: false,
           message:
             "Video job not found."
+        });
+      }
+
+      if (
+        !ownsJob(
+          job,
+          req.user.id
+        )
+      ) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "You do not have access to this video."
         });
       }
 
