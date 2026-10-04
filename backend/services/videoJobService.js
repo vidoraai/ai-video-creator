@@ -1,16 +1,21 @@
 const { pool } = require("./database");
 
-
 // ==========================================
 // CREATE VIDEO JOB
 // ==========================================
 
 async function createJob(data) {
+  if (!data.userId) {
+    throw new Error(
+      "Authenticated user is required to create a video job."
+    );
+  }
 
   // Create the video project
   const projectResult = await pool.query(
     `
     INSERT INTO video_projects (
+      user_id,
       title,
       prompt,
       duration,
@@ -18,10 +23,11 @@ async function createJob(data) {
       style,
       status
     )
-    VALUES ($1, $2, $3, $4, $5, $6)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
     RETURNING *
     `,
     [
+      data.userId,
       data.title || "Untitled Video",
       data.prompt,
       data.totalDuration || 30,
@@ -33,7 +39,6 @@ async function createJob(data) {
 
   const project =
     projectResult.rows[0];
-
 
   // Create the video job
   const jobResult = await pool.query(
@@ -60,15 +65,11 @@ async function createJob(data) {
   const job =
     jobResult.rows[0];
 
-
   // Save all scenes
   const scenes =
     data.scenes || [];
 
-  for (
-    const scene of scenes
-  ) {
-
+  for (const scene of scenes) {
     await pool.query(
       `
       INSERT INTO video_scenes (
@@ -88,9 +89,7 @@ async function createJob(data) {
         "pending"
       ]
     );
-
   }
-
 
   return {
     id:
@@ -98,6 +97,9 @@ async function createJob(data) {
 
     projectId:
       String(project.id),
+
+    userId:
+      String(project.user_id),
 
     title:
       project.title,
@@ -159,15 +161,13 @@ async function createJob(data) {
 // GET VIDEO JOB
 // ==========================================
 
-async function getJob(
-  jobId
-) {
-
+async function getJob(jobId) {
   const jobResult =
     await pool.query(
       `
       SELECT
         j.*,
+        p.user_id,
         p.title,
         p.prompt,
         p.duration,
@@ -181,17 +181,14 @@ async function getJob(
       [jobId]
     );
 
-
   if (
     jobResult.rows.length === 0
   ) {
     return null;
   }
 
-
   const row =
     jobResult.rows[0];
-
 
   // Get all scenes
   const sceneResult =
@@ -213,10 +210,8 @@ async function getJob(
       [jobId]
     );
 
-
   const scenes =
     sceneResult.rows;
-
 
   const sceneVideos =
     scenes
@@ -240,14 +235,17 @@ async function getJob(
         })
       );
 
-
   return {
-
     id:
       String(row.id),
 
     projectId:
       String(row.project_id),
+
+    userId:
+      row.user_id
+        ? String(row.user_id)
+        : null,
 
     title:
       row.title,
@@ -336,9 +334,7 @@ async function updateJob(
   jobId,
   updates
 ) {
-
   const allowedFields = {
-
     status:
       "status",
 
@@ -361,20 +357,16 @@ async function updateJob(
       "error"
   };
 
-
   const fields = [];
   const values = [];
-
 
   for (
     const [key, value]
     of Object.entries(updates)
   ) {
-
     if (
       allowedFields[key]
     ) {
-
       fields.push(
         `${allowedFields[key]} = $${values.length + 1}`
       );
@@ -385,7 +377,6 @@ async function updateJob(
     }
   }
 
-
   if (
     fields.length === 0
   ) {
@@ -394,11 +385,9 @@ async function updateJob(
     );
   }
 
-
   values.push(
     jobId
   );
-
 
   const result =
     await pool.query(
@@ -413,13 +402,11 @@ async function updateJob(
       values
     );
 
-
   if (
     result.rows.length === 0
   ) {
     return null;
   }
-
 
   return getJob(
     jobId
@@ -436,9 +423,7 @@ async function updateScene(
   sceneNumber,
   updates
 ) {
-
   const allowedFields = {
-
     status:
       "status",
 
@@ -449,20 +434,16 @@ async function updateScene(
       "video_path"
   };
 
-
   const fields = [];
   const values = [];
-
 
   for (
     const [key, value]
     of Object.entries(updates)
   ) {
-
     if (
       allowedFields[key]
     ) {
-
       fields.push(
         `${allowedFields[key]} = $${values.length + 1}`
       );
@@ -473,13 +454,11 @@ async function updateScene(
     }
   }
 
-
   if (
     fields.length === 0
   ) {
     return null;
   }
-
 
   values.push(
     jobId
@@ -488,7 +467,6 @@ async function updateScene(
   values.push(
     sceneNumber
   );
-
 
   const result =
     await pool.query(
@@ -503,13 +481,11 @@ async function updateScene(
       values
     );
 
-
   if (
     result.rows.length === 0
   ) {
     return null;
   }
-
 
   return result.rows[0];
 }
@@ -520,13 +496,8 @@ async function updateScene(
 // ==========================================
 
 module.exports = {
-
   createJob,
-
   getJob,
-
   updateJob,
-
   updateScene
-
 };
