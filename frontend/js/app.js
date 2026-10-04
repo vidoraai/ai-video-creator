@@ -89,6 +89,9 @@ const TOKEN_KEY =
 const USER_KEY =
   "vidora_user";
 
+const PENDING_PAYMENT_KEY =
+  "vidora_pending_payment";
+
 
 function getToken() {
 
@@ -152,6 +155,62 @@ function clearAuthentication() {
 
   localStorage.removeItem(
     USER_KEY
+  );
+}
+
+
+// ==========================================
+// PENDING PAYMENT STORAGE
+// ==========================================
+
+function savePendingPayment(
+  reference,
+  jobId
+) {
+
+  localStorage.setItem(
+    PENDING_PAYMENT_KEY,
+    JSON.stringify({
+      reference,
+      jobId
+    })
+  );
+}
+
+
+function getPendingPayment() {
+
+  const value =
+    localStorage.getItem(
+      PENDING_PAYMENT_KEY
+    );
+
+  if (!value) {
+    return null;
+  }
+
+  try {
+
+    return JSON.parse(
+      value
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Unable to read pending payment:",
+      error
+    );
+
+    return null;
+  }
+}
+
+
+function clearPendingPayment() {
+
+  localStorage.removeItem(
+    PENDING_PAYMENT_KEY
   );
 }
 
@@ -578,6 +637,8 @@ loginForm.addEventListener(
 
       loadVideoHistory();
 
+      await checkPendingPayment();
+
 
     } catch (error) {
 
@@ -608,6 +669,8 @@ logoutButton.addEventListener(
   () => {
 
     clearAuthentication();
+
+    clearPendingPayment();
 
     accountStatus.textContent =
       "You have been logged out.";
@@ -748,157 +811,66 @@ button.addEventListener(
       }
 
 
+      // ====================================
+      // PAYMENT REQUIRED
+      // ====================================
+
+      if (
+        data.status ===
+        "awaiting_payment"
+      ) {
+
+        if (
+          !data.authorizationUrl
+        ) {
+
+          throw new Error(
+            "Payment authorization URL was not returned."
+          );
+        }
+
+
+        if (
+          !data.paymentReference
+        ) {
+
+          throw new Error(
+            "Payment reference was not returned."
+          );
+        }
+
+
+        savePendingPayment(
+          data.paymentReference,
+          jobId
+        );
+
+
+        status.textContent =
+          `Payment required: ₦${formatNaira(
+            data.amount
+          )}. Opening secure payment page...`;
+
+
+        // Open Paystack payment.
+        window.location.href =
+          data.authorizationUrl;
+
+        return;
+      }
+
+
+      // ====================================
+      // NORMAL JOB PROCESSING
+      // ====================================
+
       status.textContent =
         "Video job created. Preparing your video...";
 
 
-      let finished =
-        false;
-
-
-      while (!finished) {
-
-        await new Promise(
-          (resolve) =>
-            setTimeout(
-              resolve,
-              3000
-            )
-        );
-
-
-        const jobResponse =
-          await fetch(
-            `${API_BASE}/api/videos/job/${jobId}`,
-            {
-              headers:
-                getAuthHeaders()
-            }
-          );
-
-
-        const jobData =
-          await jobResponse.json();
-
-
-        if (
-          jobResponse.status === 401
-        ) {
-
-          clearAuthentication();
-
-          updateAccountInterface();
-
-          throw new Error(
-            "Your login session has expired. Please log in again."
-          );
-        }
-
-
-        if (!jobResponse.ok) {
-
-          throw new Error(
-            jobData.message ||
-            "Unable to check video job."
-          );
-        }
-
-
-        const job =
-          jobData.job;
-
-
-        if (
-          job.status === "queued"
-        ) {
-
-          status.textContent =
-            "Your video is queued...";
-        }
-
-
-        else if (
-          job.status === "generating"
-        ) {
-
-          const completed =
-            job.completedScenes || 0;
-
-          const total =
-            job.sceneCount || 0;
-
-          status.textContent =
-            `Generating video... Scene ${completed} of ${total}`;
-        }
-
-
-        else if (
-          job.status === "assembling"
-        ) {
-
-          status.textContent =
-            "Assembling your finished video...";
-        }
-
-
-        else if (
-          job.status === "uploading"
-        ) {
-
-          status.textContent =
-            "Uploading your finished video securely...";
-        }
-
-
-        else if (
-          job.status === "completed"
-        ) {
-
-          finished =
-            true;
-
-          status.textContent =
-            "Your video is ready!";
-
-
-          displayFinishedVideo(
-            jobId,
-            jobData.videoUrl,
-            jobData.downloadUrl
-          );
-
-
-          loadVideoHistory();
-        }
-
-
-        else if (
-          job.status === "failed"
-        ) {
-
-          finished =
-            true;
-
-          status.textContent =
-            "Video generation failed: " +
-            (
-              job.error ||
-              "Unknown error."
-            );
-        }
-
-
-        else if (
-          job.status === "cancelled"
-        ) {
-
-          finished =
-            true;
-
-          status.textContent =
-            "Video generation was cancelled.";
-        }
-      }
+      await monitorVideoJob(
+        jobId
+      );
 
 
     } catch (error) {
@@ -920,6 +892,306 @@ button.addEventListener(
     }
   }
 );
+
+
+// ==========================================
+// FORMAT NAIRA
+// ==========================================
+
+function formatNaira(
+  amount
+) {
+
+  const number =
+    Number(amount || 0);
+
+  return number.toLocaleString(
+    "en-NG"
+  );
+}
+
+
+// ==========================================
+// CHECK PENDING PAYMENT
+// ==========================================
+
+async function checkPendingPayment() {
+
+  const pending =
+    getPendingPayment();
+
+
+  if (
+    !pending ||
+    !pending.reference ||
+    !pending.jobId
+  ) {
+
+    return;
+  }
+
+
+  status.textContent =
+    "Checking your payment...";
+
+
+  try {
+
+    const response =
+      await fetch(
+        `${API_BASE}/api/payments/verify/${encodeURIComponent(
+          pending.reference
+        )}`,
+        {
+          headers:
+            getAuthHeaders()
+        }
+      );
+
+
+    const data =
+      await response.json();
+
+
+    if (
+      response.status === 401
+    ) {
+
+      clearAuthentication();
+
+      updateAccountInterface();
+
+      return;
+    }
+
+
+    if (!response.ok) {
+
+      throw new Error(
+        data.message ||
+        "Unable to verify payment."
+      );
+    }
+
+
+    if (
+      !data.paid
+    ) {
+
+      status.textContent =
+        "Payment has not been completed yet.";
+
+      return;
+    }
+
+
+    clearPendingPayment();
+
+
+    status.textContent =
+      "Payment verified. Starting your video...";
+
+
+    await monitorVideoJob(
+      pending.jobId
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      "Pending payment verification error:",
+      error
+    );
+
+    status.textContent =
+      "Unable to verify payment: " +
+      error.message;
+  }
+}
+
+
+// ==========================================
+// MONITOR VIDEO JOB
+// ==========================================
+
+async function monitorVideoJob(
+  jobId
+) {
+
+  let finished =
+    false;
+
+
+  while (!finished) {
+
+    await new Promise(
+      (resolve) =>
+        setTimeout(
+          resolve,
+          3000
+        )
+    );
+
+
+    const jobResponse =
+      await fetch(
+        `${API_BASE}/api/videos/job/${jobId}`,
+        {
+          headers:
+            getAuthHeaders()
+        }
+      );
+
+
+    const jobData =
+      await jobResponse.json();
+
+
+    if (
+      jobResponse.status === 401
+    ) {
+
+      clearAuthentication();
+
+      updateAccountInterface();
+
+      throw new Error(
+        "Your login session has expired. Please log in again."
+      );
+    }
+
+
+    if (!jobResponse.ok) {
+
+      throw new Error(
+        jobData.message ||
+        "Unable to check video job."
+      );
+    }
+
+
+    const job =
+      jobData.job;
+
+
+    if (!job) {
+
+      throw new Error(
+        "The server did not return video job information."
+      );
+    }
+
+
+    if (
+      job.status ===
+      "queued"
+    ) {
+
+      status.textContent =
+        "Your video is queued...";
+    }
+
+
+    else if (
+      job.status ===
+      "paid"
+    ) {
+
+      status.textContent =
+        "Payment confirmed. Starting video generation...";
+    }
+
+
+    else if (
+      job.status ===
+      "generating"
+    ) {
+
+      const completed =
+        job.completedScenes || 0;
+
+      const total =
+        job.sceneCount || 0;
+
+      status.textContent =
+        `Generating video... Scene ${completed} of ${total}`;
+    }
+
+
+    else if (
+      job.status ===
+      "assembling"
+    ) {
+
+      status.textContent =
+        "Assembling your finished video...";
+    }
+
+
+    else if (
+      job.status ===
+      "uploading"
+    ) {
+
+      status.textContent =
+        "Uploading your finished video securely...";
+    }
+
+
+    else if (
+      job.status ===
+      "completed"
+    ) {
+
+      finished =
+        true;
+
+      status.textContent =
+        "Your video is ready!";
+
+
+      displayFinishedVideo(
+        jobId,
+        jobData.videoUrl,
+        jobData.downloadUrl
+      );
+
+
+      loadVideoHistory();
+    }
+
+
+    else if (
+      job.status ===
+      "failed"
+    ) {
+
+      finished =
+        true;
+
+      status.textContent =
+        "Video generation failed: " +
+        (
+          job.error ||
+          "Unknown error."
+        );
+    }
+
+
+    else if (
+      job.status ===
+      "cancelled"
+    ) {
+
+      finished =
+        true;
+
+      status.textContent =
+        "Video generation was cancelled.";
+    }
+  }
+}
 
 
 // ==========================================
@@ -1312,3 +1584,10 @@ updateAccountInterface();
 // ==========================================
 
 loadVideoHistory();
+
+
+// ==========================================
+// CHECK FOR PAYMENT RETURN
+// ==========================================
+
+checkPendingPayment();
