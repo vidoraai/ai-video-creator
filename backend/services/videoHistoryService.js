@@ -6,19 +6,28 @@ const { pool } = require("./database");
 // ==========================================
 
 async function addVideoToHistory(video) {
+  if (!video.userId) {
+    throw new Error(
+      "Authenticated user is required for video history."
+    );
+  }
+
   const result = await pool.query(
     `
     INSERT INTO video_history (
+      user_id,
       project_id,
       job_id,
       title,
       video_path,
       status
     )
-    VALUES ($1, $2, $3, $4, $5)
+    VALUES ($1, $2, $3, $4, $5, $6)
     RETURNING *
     `,
     [
+      video.userId,
+
       video.projectId || null,
 
       video.id || null,
@@ -48,6 +57,12 @@ async function updateVideoHistory(video) {
     return null;
   }
 
+  if (!video.userId) {
+    throw new Error(
+      "Authenticated user is required for video history."
+    );
+  }
+
   const result = await pool.query(
     `
     UPDATE video_history
@@ -56,6 +71,7 @@ async function updateVideoHistory(video) {
       video_path = $2,
       status = $3
     WHERE job_id = $4
+      AND user_id = $5
     RETURNING *
     `,
     [
@@ -69,7 +85,9 @@ async function updateVideoHistory(video) {
       video.status ||
         "queued",
 
-      video.id
+      video.id,
+
+      video.userId
     ]
   );
 
@@ -89,11 +107,20 @@ async function updateVideoHistory(video) {
 // GET VIDEO HISTORY
 // ==========================================
 
-async function getVideoHistory() {
+async function getVideoHistory(
+  userId
+) {
+  if (!userId) {
+    throw new Error(
+      "Authenticated user is required to load video history."
+    );
+  }
+
   const result = await pool.query(
     `
     SELECT
       h.id,
+      h.user_id,
       h.project_id,
       h.job_id,
       h.title,
@@ -111,8 +138,11 @@ async function getVideoHistory() {
     LEFT JOIN video_projects p
       ON p.id = h.project_id
 
+    WHERE h.user_id = $1
+
     ORDER BY h.created_at DESC
-    `
+    `,
+    [userId]
   );
 
   return result.rows.map(
@@ -162,12 +192,20 @@ async function getVideoHistory() {
 // ==========================================
 
 async function getHistoryItem(
-  jobId
+  jobId,
+  userId
 ) {
+  if (!userId) {
+    throw new Error(
+      "Authenticated user is required to load history item."
+    );
+  }
+
   const result = await pool.query(
     `
     SELECT
       h.id,
+      h.user_id,
       h.project_id,
       h.job_id,
       h.title,
@@ -186,8 +224,12 @@ async function getHistoryItem(
       ON p.id = h.project_id
 
     WHERE h.job_id = $1
+      AND h.user_id = $2
     `,
-    [jobId]
+    [
+      jobId,
+      userId
+    ]
   );
 
   if (
