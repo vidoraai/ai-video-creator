@@ -18,172 +18,119 @@ const {
   pool
 } = require("../services/database");
 
-const requireAuth =
-  require("../middleware/authMiddleware");
+const {
+  requireAuth
+} = require("../middleware/authMiddleware");
 
-const router =
-  express.Router();
+const router = express.Router();
 
 
-// ==========================================
 // INITIALIZE PAYMENT
-// ==========================================
+router.post("/initialize", requireAuth, async (req, res) => {
+  try {
+    const {
+      email,
+      duration,
+      jobId
+    } = req.body;
 
-router.post(
-  "/initialize",
-  requireAuth,
-  async (req, res) => {
-    try {
-      const {
-        duration,
-        jobId
-      } = req.body;
+    const userId = req.user.id;
 
-      const seconds =
-        Number(duration);
+    const amount = getVideoPrice(duration);
 
-      if (
-        !Number.isInteger(seconds)
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Video duration must be a whole number."
-        });
-      }
+    const payment = await initializePayment({
+      email,
+      duration,
+      userId,
+      jobId
+    });
 
-      const amount =
-        getVideoPrice(seconds);
+    return res.status(200).json({
+      success: true,
+      message: "Payment initialized.",
+      ...payment,
+      amount
+    });
 
-      const payment =
-        await initializePayment({
-          email:
-            req.user.email,
+  } catch (error) {
+    console.error(
+      "Payment initialization error:",
+      error
+    );
 
-          duration:
-            seconds,
-
-          userId:
-            req.user.id,
-
-          jobId:
-            jobId || null
-        });
-
-      return res.json({
-        success: true,
-
-        message:
-          "Payment initialized.",
-
-        amount,
-
-        currency:
-          "NGN",
-
-        reference:
-          payment.reference,
-
-        authorizationUrl:
-          payment.authorizationUrl,
-
-        accessCode:
-          payment.accessCode,
-
-        jobId:
-          jobId || null
-      });
-
-    } catch (error) {
-      console.error(
-        "Payment initialization error:",
-        error
-      );
-
-      return res.status(400).json({
-        success: false,
-
-        message:
-          error.message ||
-          "Unable to initialize payment."
-      });
-    }
+    return res.status(400).json({
+      success: false,
+      message:
+        error.message ||
+        "Unable to initialize payment."
+    });
   }
-);
+});
 
 
-// ==========================================
 // VERIFY PAYMENT
-// ==========================================
-
 router.get(
   "/verify/:reference",
   requireAuth,
   async (req, res) => {
     try {
-      const result =
+      const reference =
+        req.params.reference;
+
+      const userId =
+        req.user.id;
+
+      const paymentResult =
         await verifyPayment(
-          req.params.reference,
+          reference,
           null,
-          req.user.id
+          userId
         );
 
-      // Payment has not been completed.
-      if (
-        !result.paid
-      ) {
-        return res.json({
-          success: true,
-          ...result,
+      if (!paymentResult.paid) {
+        return res.status(400).json({
+          success: false,
+          paid: false,
           message:
             "Payment has not been completed."
         });
       }
 
-      // A successful payment must belong
-      // to a video job before generation starts.
-      if (
-        !result.jobId
-      ) {
+      const jobId =
+        paymentResult.jobId;
+
+      if (!jobId) {
         return res.status(400).json({
           success: false,
+          paid: true,
           message:
-            "Payment was successful, but no video job is attached to it."
+            "Payment succeeded but no video job was found."
         });
       }
 
       const job =
-        await getJob(
-          result.jobId
-        );
+        await getJob(jobId);
 
       if (!job) {
         return res.status(404).json({
           success: false,
+          paid: true,
           message:
-            "The video job associated with this payment was not found."
+            "Video job not found."
         });
       }
 
-      // Extra ownership protection.
       if (
         String(job.userId) !==
-        String(req.user.id)
+        String(userId)
       ) {
         return res.status(403).json({
           success: false,
           message:
-            "You are not authorized to start this video job."
+            "You do not own this video job."
         });
       }
 
-      // Atomically claim the job.
-      //
-      // Only the first successful request can
-      // change queued -> paid.
-      //
-      // This prevents duplicate video generation
-      // if the verification endpoint is called twice.
       const claimResult =
         await pool.query(
           `
@@ -191,74 +138,45 @@ router.get(
           SET
             status = 'paid',
             updated_at = CURRENT_TIMESTAMP
-          WHERE
-            id = $1
+          WHERE id = $1
             AND status = 'queued'
           RETURNING id
           `,
-          [
-            result.jobId
-          ]
+          [jobId]
         );
 
-      // We successfully claimed the job.
-      if (
-        claimResult.rows.length === 1
-      ) {
-        processVideoJob(
-          result.jobId
-        ).catch(
-          (error) => {
+      if (claimResult.rows.length > 0) {
+
+        processVideoJob(jobId)
+          .catch(error => {
             console.error(
-              "Video worker failed:",
+              "Video processing error:",
               error
             );
-          }
-        );
+          });
 
         return res.json({
           success: true,
-
           paid: true,
-
-          status:
-            "paid",
-
-          reference:
-            result.reference,
-
-          jobId:
-            result.jobId,
-
+          status: "paid",
+          jobId: String(jobId),
           message:
-            "Payment verified. Video generation has started."
+            "Payment verified. Video generation started."
         });
       }
 
-      // The job was already claimed previously.
       const currentJob =
-        await getJob(
-          result.jobId
-        );
+        await getJob(jobId);
 
       return res.json({
         success: true,
-
         paid: true,
-
         status:
-          currentJob
-            ? currentJob.status
-            : "processing",
-
-        reference:
-          result.reference,
-
-        jobId:
-          result.jobId,
-
+          currentJob?.status ||
+          "processing",
+        jobId: String(jobId),
         message:
-          "Payment already verified and video generation is already in progress or complete."
+          "Payment already verified. Video job is already processing."
       });
 
     } catch (error) {
@@ -269,19 +187,13 @@ router.get(
 
       return res.status(400).json({
         success: false,
-
         message:
           error.message ||
-          "Unable to verify Paystack payment."
+          "Unable to verify payment."
       });
     }
   }
 );
 
 
-// ==========================================
-// EXPORT
-// ==========================================
-
-module.exports =
-  router;
+module.exports = router;
