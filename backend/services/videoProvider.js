@@ -32,10 +32,10 @@ function clampDuration(duration) {
 
 function getRunwayRatio(aspectRatio) {
   if (aspectRatio === "9:16") {
-    return "768:1280";
+    return "720:1280";
   }
 
-  return "1280:768";
+  return "1280:720";
 }
 
 async function createVideo({
@@ -107,7 +107,9 @@ async function getVideoStatus(videoId) {
 
   return {
     id: task.id,
-    status: String(task.status || "").toLowerCase(),
+    status: String(
+      task.status || ""
+    ).toLowerCase(),
     output: task.output || null,
     failure:
       task.failure ||
