@@ -1,133 +1,65 @@
 const RunwayML = require("@runwayml/sdk");
 
-
-// ==========================================
-// CONFIGURATION
-// ==========================================
-
 const RUNWAY_MODEL =
   process.env.RUNWAY_MODEL || "gen4.5";
 
-const MIN_DURATION = 2;
-const MAX_DURATION = 10;
+const RUNWAY_API_SECRET =
+  process.env.RUNWAYML_API_SECRET ||
+  process.env.RUNWAY_API_KEY;
 
+if (!RUNWAY_API_SECRET) {
+  console.warn(
+    "Runway API credentials are not configured."
+  );
+}
 
-// ==========================================
-// GET RUNWAY CLIENT
-// ==========================================
+const client = new RunwayML({
+  apiKey: RUNWAY_API_SECRET
+});
 
-function getClient() {
-  const apiKey =
-    process.env.RUNWAY_API_KEY ||
-    process.env.RUNWAYML_API_SECRET;
+function clampDuration(duration) {
+  const value = Number(duration);
 
-  if (!apiKey) {
+  if (!Number.isFinite(value)) {
+    return 5;
+  }
+
+  return Math.min(
+    10,
+    Math.max(2, Math.round(value))
+  );
+}
+
+function getRunwayRatio(aspectRatio) {
+  if (aspectRatio === "9:16") {
+    return "768:1280";
+  }
+
+  return "1280:768";
+}
+
+async function createVideo({
+  prompt,
+  duration,
+  aspectRatio = "16:9"
+}) {
+  if (!RUNWAY_API_SECRET) {
     throw new Error(
       "Runway API credentials are not configured."
     );
   }
 
-  return new RunwayML({
-    apiKey
-  });
-}
-
-
-// ==========================================
-// NORMALIZE STATUS
-// ==========================================
-
-function normalizeStatus(status) {
-  if (!status) {
-    return "processing";
-  }
-
-  const normalized =
-    String(status).toUpperCase();
-
-  if (normalized === "SUCCEEDED") {
-    return "completed";
-  }
-
-  if (normalized === "FAILED") {
-    return "failed";
-  }
-
-  if (
-    normalized === "CANCELED" ||
-    normalized === "CANCELLED"
-  ) {
-    return "cancelled";
-  }
-
-  return "processing";
-}
-
-
-// ==========================================
-// CREATE VIDEO
-// ==========================================
-
-async function createVideo({
-  prompt,
-  seconds,
-  size
-}) {
-  if (
-    !prompt ||
-    !String(prompt).trim()
-  ) {
+  if (!prompt || !String(prompt).trim()) {
     throw new Error(
-      "Video prompt is required."
+      "A video prompt is required."
     );
   }
 
-  const client =
-    getClient();
+  const videoDuration =
+    clampDuration(duration);
 
-
-  // ========================================
-  // ASPECT RATIO
-  // ========================================
-
-  let ratio =
-    "1280:720";
-
-  if (
-    size === "720x1280"
-  ) {
-    ratio =
-      "720:1280";
-  }
-
-
-  // ========================================
-  // DURATION
-  // Gen-4.5 supports 2–10 seconds
-  // ========================================
-
-  const requestedSeconds =
-    Number(seconds);
-
-  const duration =
-    Math.max(
-      MIN_DURATION,
-      Math.min(
-        MAX_DURATION,
-        Number.isFinite(
-          requestedSeconds
-        )
-          ? Math.round(
-              requestedSeconds
-            )
-          : 4
-      )
-    );
-
-
-  // ========================================
-  // CREATE REAL RUNWAY VIDEO TASK
-  // ========================================
+  const ratio =
+    getRunwayRatio(aspectRatio);
 
   console.log(
     "Starting Runway video generation..."
@@ -138,7 +70,7 @@ async function createVideo({
   );
 
   console.log(
-    `Duration: ${duration}s`
+    `Duration: ${videoDuration}s`
   );
 
   console.log(
@@ -147,215 +79,52 @@ async function createVideo({
 
   const task =
     await client.imageToVideo.create({
-      model:
-        RUNWAY_MODEL,
-
-      promptText:
-        String(prompt).trim(),
-
+      model: RUNWAY_MODEL,
+      promptText: String(prompt).trim(),
       ratio,
-
-      duration
+      duration: videoDuration
     });
-
-
-  if (
-    !task ||
-    !task.id
-  ) {
-    throw new Error(
-      "Runway did not return a video task ID."
-    );
-  }
-
 
   console.log(
     `Runway task created: ${task.id}`
   );
 
-
   return {
-    id:
-      task.id,
-
-    status:
-      "processing",
-
-    provider:
-      "runway",
-
-    model:
-      RUNWAY_MODEL,
-
-    requestedDuration:
-      requestedSeconds,
-
-    duration,
-
-    ratio
+    id: task.id,
+    status: "queued"
   };
 }
 
-
-// ==========================================
-// GET VIDEO STATUS
-// ==========================================
-
-async function getVideoStatus(
-  videoId
-) {
-  if (
-    !videoId
-  ) {
+async function getVideoStatus(videoId) {
+  if (!videoId) {
     throw new Error(
-      "Runway video task ID is required."
+      "Runway video ID is required."
     );
   }
-
-  const client =
-    getClient();
 
   const task =
-    await client.tasks.retrieve(
-      videoId
-    );
+    await client.tasks.retrieve(videoId);
 
-
-  const status =
-    normalizeStatus(
-      task.status
-    );
-
-
-  console.log(
-    `Runway task ${videoId}: ${task.status}`
-  );
-
-
-  // ========================================
-  // COMPLETED
-  // ========================================
-
-  if (
-    status === "completed"
-  ) {
-    return {
-      id:
-        videoId,
-
-      status:
-        "completed",
-
-      output:
-        task.output || []
-    };
-  }
-
-
-  // ========================================
-  // FAILED
-  // ========================================
-
-  if (
-    status === "failed"
-  ) {
-    const failureMessage =
+  return {
+    id: task.id,
+    status: String(task.status || "").toLowerCase(),
+    output: task.output || null,
+    failure:
       task.failure ||
       task.failureCode ||
-      task.error ||
-      "Runway video generation failed.";
-
-    return {
-      id:
-        videoId,
-
-      status:
-        "failed",
-
-      error:
-        failureMessage
-    };
-  }
-
-
-  // ========================================
-  // CANCELLED
-  // ========================================
-
-  if (
-    status === "cancelled"
-  ) {
-    return {
-      id:
-        videoId,
-
-      status:
-        "cancelled"
-    };
-  }
-
-
-  // ========================================
-  // STILL PROCESSING
-  // ========================================
-
-  return {
-    id:
-      videoId,
-
-    status:
-      "processing"
+      null
   };
 }
 
-
-// ==========================================
-// DOWNLOAD VIDEO
-// ==========================================
-
-async function downloadVideo(
-  videoId
-) {
-  if (
-    !videoId
-  ) {
+async function downloadVideo(videoId) {
+  if (!videoId) {
     throw new Error(
-      "Runway video task ID is required."
+      "Runway video ID is required."
     );
   }
-
-  const client =
-    getClient();
-
-
-  // ========================================
-  // GET COMPLETED RUNWAY TASK
-  // ========================================
 
   const task =
-    await client.tasks.retrieve(
-      videoId
-    );
-
-
-  const status =
-    normalizeStatus(
-      task.status
-    );
-
-
-  if (
-    status !== "completed"
-  ) {
-    throw new Error(
-      `Runway video is not completed. Current status: ${task.status}`
-    );
-  }
-
-
-  // ========================================
-  // GET OUTPUT URL
-  // ========================================
+    await client.tasks.retrieve(videoId);
 
   if (
     !task.output ||
@@ -363,83 +132,34 @@ async function downloadVideo(
     !task.output[0]
   ) {
     throw new Error(
-      "Runway did not return a video output URL."
+      "Runway video output is not available."
     );
   }
-
 
   const videoUrl =
     task.output[0];
 
-
   console.log(
-    `Downloading completed Runway video for task ${videoId}`
+    "Downloading generated Runway video..."
   );
 
-
-  // ========================================
-  // DOWNLOAD REAL VIDEO
-  // ========================================
-
   const response =
-    await fetch(
-      videoUrl
-    );
+    await fetch(videoUrl);
 
-
-  if (
-    !response.ok
-  ) {
+  if (!response.ok) {
     throw new Error(
-      `Unable to download Runway video: HTTP ${response.status}`
+      `Failed to download Runway video: ${response.status} ${response.statusText}`
     );
   }
-
 
   const arrayBuffer =
     await response.arrayBuffer();
 
-
-  const buffer =
-    Buffer.from(
-      arrayBuffer
-    );
-
-
-  if (
-    buffer.length === 0
-  ) {
-    throw new Error(
-      "Runway returned an empty video file."
-    );
-  }
-
-
-  console.log(
-    `Downloaded Runway video: ${buffer.length} bytes`
-  );
-
-
-  return buffer;
+  return Buffer.from(arrayBuffer);
 }
-
-
-// ==========================================
-// PROVIDER NAME
-// ==========================================
-
-function getProviderName() {
-  return "runway";
-}
-
-
-// ==========================================
-// EXPORTS
-// ==========================================
 
 module.exports = {
   createVideo,
   getVideoStatus,
-  downloadVideo,
-  getProviderName
+  downloadVideo
 };
