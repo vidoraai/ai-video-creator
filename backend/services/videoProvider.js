@@ -100,7 +100,7 @@ async function createVideo({
     getRunwayRatio(aspectRatio);
 
   console.log(
-    "Starting Runway video generation..."
+    "Starting Runway Gen-4.5 text-to-video generation..."
   );
 
   console.log(
@@ -123,12 +123,12 @@ async function createVideo({
   };
 
   console.log(
-    "Sending text-to-video request to Runway..."
+    "Sending request to Runway text-to-video endpoint..."
   );
 
   const task =
     await runwayRequest(
-      "/image_to_video",
+      "/text_to_video",
       {
         method: "POST",
         body: JSON.stringify(payload)
