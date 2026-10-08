@@ -1,4 +1,4 @@
-const RunwayML = require("@runwayml/sdk");
+const API_URL = "https://api.dev.runwayml.com/v1";
 
 const RUNWAY_MODEL =
   process.env.RUNWAY_MODEL || "gen4.5";
@@ -12,10 +12,6 @@ if (!RUNWAY_API_SECRET) {
     "Runway API credentials are not configured."
   );
 }
-
-const client = new RunwayML({
-  apiKey: RUNWAY_API_SECRET
-});
 
 function clampDuration(duration) {
   const value = Number(duration);
@@ -36,6 +32,48 @@ function getRunwayRatio(aspectRatio) {
   }
 
   return "1280:720";
+}
+
+async function runwayRequest(path, options = {}) {
+  if (!RUNWAY_API_SECRET) {
+    throw new Error(
+      "Runway API credentials are not configured."
+    );
+  }
+
+  const response = await fetch(
+    `${API_URL}${path}`,
+    {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization":
+          `Bearer ${RUNWAY_API_SECRET}`,
+        "X-Runway-Version": "2024-11-06",
+        ...(options.headers || {})
+      }
+    }
+  );
+
+  const text = await response.text();
+
+  let data;
+
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = {
+      error: text
+    };
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `Runway API error ${response.status}: ${JSON.stringify(data)}`
+    );
+  }
+
+  return data;
 }
 
 async function createVideo({
@@ -77,13 +115,25 @@ async function createVideo({
     `Ratio: ${ratio}`
   );
 
+  const payload = {
+    model: RUNWAY_MODEL,
+    promptText: String(prompt).trim(),
+    ratio,
+    duration: videoDuration
+  };
+
+  console.log(
+    "Sending text-to-video request to Runway..."
+  );
+
   const task =
-    await client.imageToVideo.create({
-      model: RUNWAY_MODEL,
-      promptText: String(prompt).trim(),
-      ratio,
-      duration: videoDuration
-    });
+    await runwayRequest(
+      "/image_to_video",
+      {
+        method: "POST",
+        body: JSON.stringify(payload)
+      }
+    );
 
   console.log(
     `Runway task created: ${task.id}`
@@ -103,7 +153,12 @@ async function getVideoStatus(videoId) {
   }
 
   const task =
-    await client.tasks.retrieve(videoId);
+    await runwayRequest(
+      `/tasks/${encodeURIComponent(videoId)}`,
+      {
+        method: "GET"
+      }
+    );
 
   return {
     id: task.id,
@@ -126,7 +181,12 @@ async function downloadVideo(videoId) {
   }
 
   const task =
-    await client.tasks.retrieve(videoId);
+    await runwayRequest(
+      `/tasks/${encodeURIComponent(videoId)}`,
+      {
+        method: "GET"
+      }
+    );
 
   if (
     !task.output ||
