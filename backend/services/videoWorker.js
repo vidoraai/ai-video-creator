@@ -18,339 +18,136 @@ const {
   uploadVideo
 } = require("./videoStorage");
 
-
-// ==========================================
-// WAIT
-// ==========================================
+const POLL_INTERVAL_MS = 5000;
+const VIDEO_TIMEOUT_MS = 15 * 60 * 1000;
 
 function wait(ms) {
-  return new Promise(
-    (resolve) =>
-      setTimeout(resolve, ms)
-  );
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+async function waitForVideo(videoId) {
+  const startedAt = Date.now();
 
-// ==========================================
-// WAIT FOR REAL VIDEO
-// ==========================================
-
-async function waitForVideo(
-  videoId
-) {
-  while (true) {
-    const video =
-      await getVideoStatus(
-        videoId
-      );
+  while (Date.now() - startedAt < VIDEO_TIMEOUT_MS) {
+    const video = await getVideoStatus(videoId);
 
     console.log(
-      `Video ${videoId} status: ${video.status}`
+      `Runway task ${videoId} status: ${video.status}`
     );
 
-    if (
-      video.status ===
-      "completed"
-    ) {
+    if (video.status === "completed") {
       return video;
     }
 
     if (
-      video.status ===
-      "failed"
+      video.status === "failed" ||
+      video.status === "cancelled"
     ) {
       throw new Error(
-        video.error ||
-        "Video generation failed."
+        video.failure ||
+        `Runway task ${videoId} ${video.status}.`
       );
     }
 
-    if (
-      video.status ===
-      "cancelled"
-    ) {
-      throw new Error(
-        "Video generation was cancelled."
-      );
-    }
-
-    await wait(5000);
+    await wait(POLL_INTERVAL_MS);
   }
+
+  throw new Error(
+    `Runway task ${videoId} timed out after 15 minutes.`
+  );
 }
 
-
-// ==========================================
-// PROCESS VIDEO JOB
-// ==========================================
-
-async function processVideoJob(
-  jobId
-) {
-  const job =
-    await getJob(
-      jobId
-    );
+async function processVideoJob(jobId) {
+  const job = await getJob(jobId);
 
   if (!job) {
-    console.error(
-      "Job not found:",
-      jobId
-    );
-
+    console.error("Job not found:", jobId);
     return;
   }
 
   const sceneVideos = [];
+  let currentSceneNumber = null;
 
   try {
+    if (!Array.isArray(job.scenes) || job.scenes.length === 0) {
+      throw new Error("This video job has no scenes to generate.");
+    }
 
-    // ======================================
-    // START JOB
-    // ======================================
+    await updateJob(jobId, {
+      status: "generating",
+      completedScenes: 0,
+      currentScene: 1
+    });
 
-    await updateJob(
-      jobId,
-      {
-        status:
-          "generating",
+    console.log(`Starting video job ${jobId}`);
+    console.log(`Total duration: ${job.totalDuration}s`);
+    console.log(`Total scenes: ${job.sceneCount}`);
+    console.log(`Aspect ratio: ${job.aspectRatio}`);
 
-        completedScenes:
-          0,
-
-        currentScene:
-          1
-      }
-    );
-
-    console.log(
-      `Starting video job ${jobId}`
-    );
-
-    console.log(
-      `Total duration: ${job.totalDuration}s`
-    );
-
-    console.log(
-      `Total scenes: ${job.sceneCount}`
-    );
-
-    console.log(
-      `Aspect ratio: ${job.aspectRatio}`
-    );
-
-
-    // ======================================
-    // GENERATE EACH REAL SCENE
-    // ======================================
-
-    for (
-      let i = 0;
-      i < job.scenes.length;
-      i++
-    ) {
-
-      const scene =
-        job.scenes[i];
+    for (let i = 0; i < job.scenes.length; i++) {
+      const scene = job.scenes[i];
+      currentSceneNumber = scene.sceneNumber;
 
       console.log(
-        `Generating scene ${scene.sceneNumber} of ${job.sceneCount}`
+        `Generating scene ${scene.sceneNumber} of ${job.scenes.length}`
       );
 
-      console.log(
-        `Scene duration: ${scene.duration}s`
-      );
-
-
-      // ====================================
-      // UPDATE SCENE
-      // ====================================
-
-      await updateScene(
-        jobId,
-        scene.sceneNumber,
-        {
-          status:
-            "generating"
-        }
-      );
-
-      await updateJob(
-        jobId,
-        {
-          status:
-            "generating",
-
-          currentScene:
-            scene.sceneNumber
-        }
-      );
-
-
-      // ====================================
-      // SELECT PROVIDER VIDEO SIZE
-      // ====================================
-
-      let providerSize =
-        "1280x720";
-
-      if (
-        job.aspectRatio ===
-        "9:16"
-      ) {
-        providerSize =
-          "720x1280";
-      }
-
-
-      // ====================================
-      // SEND SCENE TO REAL PROVIDER
-      // ====================================
-
-      const video =
-        await createVideo({
-          prompt:
-            scene.prompt,
-
-          seconds:
-            scene.duration,
-
-          size:
-            providerSize
-        });
-
-      if (
-        !video ||
-        !video.id
-      ) {
-        throw new Error(
-          `Video provider did not return a task ID for scene ${scene.sceneNumber}.`
-        );
-      }
-
-      console.log(
-        `Scene ${scene.sceneNumber} provider task: ${video.id}`
-      );
-
-
-      // ====================================
-      // SAVE PROVIDER TASK ID
-      // ====================================
-
-      await updateScene(
-        jobId,
-        scene.sceneNumber,
-        {
-          status:
-            "processing",
-
-          videoId:
-            video.id
-        }
-      );
-
-
-      // ====================================
-      // WAIT FOR REAL VIDEO
-      // ====================================
-
-      const completedVideo =
-        await waitForVideo(
-          video.id
-        );
-
-
-      // ====================================
-      // MARK SCENE COMPLETE
-      // ====================================
-
-      await updateScene(
-        jobId,
-        scene.sceneNumber,
-        {
-          status:
-            "completed",
-
-          videoId:
-            completedVideo.id
-        }
-      );
-
-
-      // ====================================
-      // ADD TO ASSEMBLY LIST
-      // ====================================
-
-      sceneVideos.push({
-        sceneNumber:
-          scene.sceneNumber,
-
-        videoId:
-          completedVideo.id,
-
-        duration:
-          scene.duration,
-
-        status:
-          "completed"
+      await updateScene(jobId, scene.sceneNumber, {
+        status: "generating"
       });
 
+      await updateJob(jobId, {
+        status: "generating",
+        currentScene: scene.sceneNumber
+      });
 
-      // ====================================
-      // UPDATE PROGRESS
-      // ====================================
+      const video = await createVideo({
+        prompt: scene.prompt,
+        duration: scene.duration,
+        aspectRatio: job.aspectRatio
+      });
 
-      await updateJob(
-        jobId,
-        {
-          completedScenes:
-            i + 1
-        }
-      );
+      if (!video || !video.id) {
+        throw new Error(
+          `Runway did not return a task ID for scene ${scene.sceneNumber}.`
+        );
+      }
+
+      await updateScene(jobId, scene.sceneNumber, {
+        status: "processing",
+        videoId: video.id
+      });
+
+      const completedVideo = await waitForVideo(video.id);
+
+      sceneVideos.push({
+        sceneNumber: scene.sceneNumber,
+        videoId: completedVideo.id,
+        duration: scene.duration,
+        status: "completed"
+      });
+
+      await updateScene(jobId, scene.sceneNumber, {
+        status: "completed",
+        videoId: completedVideo.id
+      });
+
+      await updateJob(jobId, {
+        completedScenes: i + 1
+      });
 
       console.log(
-        `Scene ${scene.sceneNumber} completed`
-      );
-
-      console.log(
-        `Progress: ${i + 1}/${job.sceneCount}`
+        `Scene ${scene.sceneNumber} completed (${i + 1}/${job.scenes.length}).`
       );
     }
 
+    await updateJob(jobId, {
+      status: "assembling"
+    });
 
-    // ======================================
-    // BEGIN ASSEMBLY
-    // ======================================
+    const outputPath = getVideoPath(jobId);
 
-    await updateJob(
-      jobId,
-      {
-        status:
-          "assembling"
-      }
-    );
-
-    console.log(
-      `All ${sceneVideos.length} scenes generated.`
-    );
-
-    console.log(
-      "Starting final video assembly..."
-    );
-
-
-    // ======================================
-    // TEMPORARY LOCAL OUTPUT PATH
-    // ======================================
-
-    const outputPath =
-      getVideoPath(
-        jobId
-      );
-
-
-    // ======================================
-    // ASSEMBLE REAL VIDEOS
-    // ======================================
+    console.log("Assembling generated scenes...");
 
     await assembleVideos(
       sceneVideos,
@@ -359,112 +156,47 @@ async function processVideoJob(
       job.aspectRatio
     );
 
+    await updateJob(jobId, {
+      status: "uploading"
+    });
 
-    // ======================================
-    // UPLOAD FINAL VIDEO TO CLOUDFLARE R2
-    // ======================================
+    console.log("Uploading final video to storage...");
 
-    await updateJob(
-      jobId,
-      {
-        status:
-          "uploading"
-      }
-    );
+    const storageKey = await uploadVideo(jobId, outputPath);
 
-    console.log(
-      "Uploading final video to Cloudflare R2..."
-    );
+    if (!storageKey) {
+      throw new Error("Video storage did not return a file key.");
+    }
 
-    const storageKey =
-      await uploadVideo(
-        jobId,
-        outputPath
-      );
+    await updateJob(jobId, {
+      status: "completed",
+      finalVideoPath: storageKey,
+      error: null
+    });
 
-    console.log(
-      `Final video uploaded to R2: ${storageKey}`
-    );
-
-
-    // ======================================
-    // COMPLETE JOB
-    // ======================================
-
-    await updateJob(
-      jobId,
-      {
-        status:
-          "completed",
-
-        finalVideoPath:
-          storageKey
-      }
-    );
-
-
-    console.log(
-      `Video job ${jobId} completed successfully.`
-    );
-
+    console.log(`Video job ${jobId} completed successfully.`);
   } catch (error) {
+    console.error(`Video worker error for job ${jobId}:`, error);
 
-    // ======================================
-    // LOG ERROR
-    // ======================================
+    try {
+      await updateJob(jobId, {
+        status: "failed",
+        error: error.message || "Video generation failed."
+      });
 
-    console.error(
-      `Video worker error for job ${jobId}:`,
-      error
-    );
-
-
-    // ======================================
-    // MARK JOB FAILED
-    // ======================================
-
-    await updateJob(
-      jobId,
-      {
-        status:
-          "failed",
-
-        error:
-          error.message ||
-          "Video generation failed."
+      if (currentSceneNumber !== null) {
+        await updateScene(jobId, currentSceneNumber, {
+          status: "failed"
+        });
       }
-    );
-
-
-    // ======================================
-    // MARK CURRENT SCENE FAILED
-    // ======================================
-
-    const failedJob =
-      await getJob(
-        jobId
-      );
-
-    if (
-      failedJob &&
-      failedJob.currentScene
-    ) {
-      await updateScene(
-        jobId,
-        failedJob.currentScene,
-        {
-          status:
-            "failed"
-        }
+    } catch (updateError) {
+      console.error(
+        `Could not save failure status for job ${jobId}:`,
+        updateError
       );
     }
   }
 }
-
-
-// ==========================================
-// EXPORTS
-// ==========================================
 
 module.exports = {
   processVideoJob
