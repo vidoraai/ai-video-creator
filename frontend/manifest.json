@@ -1,0 +1,19 @@
+{
+  "name": "Vidora AI",
+  "short_name": "Vidora AI",
+  "description": "Create AI-powered videos with Vidora AI.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#080B19",
+  "theme_color": "#10152F",
+  "icons": [
+    {
+      "src": "./vidora-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
